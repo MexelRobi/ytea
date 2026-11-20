@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ytea Studio — Visual Studio Code Style</title>
+  <title>ytea Studio</title>
   <link rel="icon" href="https://mexelrobi.github.io/ytea/favicon.ico" sizes="any">
   <link rel="apple-touch-icon" href="https://mexelrobi.github.io/ytea/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -44,15 +44,17 @@
       </button>
     </div>
 
-    <!-- VS Code Search / Command Center Pill -->
     <div class="titlebar-center">
       <div class="command-center" id="windowTitle">
-        
         <span id="windowTitleText">main.ytea — ytea Studio</span>
       </div>
     </div>
 
     <div class="titlebar-right">
+      <button id="btnSettings" class="tb-btn" title="Settings">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M9.1 4.4L8.6 2H7.4l-.5 2.4-.7.3-2-1.2-.9.9 1.2 2-.3.7L2 7.4v1.2l2.4.5.3.7-1.2 2 .9.9 2-1.2.7.3.5 2.4h1.2l.5-2.4.7-.3 2 1.2.9-.9-1.2-2 .3-.7 2.4-.5V7.4l-2.4-.5-.3-.7 1.2-2-.9-.9-2 1.2-.7-.3zM8 10a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/></svg>
+        <span>Settings</span>
+      </button>
       <button id="btnCompile" class="tb-btn" title="Compile Project (Ctrl+S)">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="#89d185"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z"/></svg>
         <span>Compile</span>
@@ -70,11 +72,9 @@
 
   <!-- Main VS Code Workbench -->
   <div class="workbench">
-
-    <!-- Activity Bar -->
     <aside class="activity-bar">
       <div class="act-top">
-        <button class="act-item active" data-sidebar="explorer" title="Explorer (Ctrl+Shift+E)">
+        <button class="act-item active" data-sidebar="explorer" title="Explorer">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
             <polyline points="14 2 14 8 20 8"/>
@@ -101,6 +101,12 @@
         </button>
       </div>
       <div class="act-bottom">
+        <button class="act-item" id="actSettings" title="Settings">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
         <button class="act-item" id="actReadme" title="Documentation (README.md)">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <circle cx="12" cy="12" r="10"/>
@@ -111,12 +117,11 @@
       </div>
     </aside>
 
-    <!-- Explorer Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-header">
         <span>EXPLORER</span>
         <div class="sidebar-actions">
-          <button id="btnNewFile" class="icon-btn" title="New File...">
+          <button id="btnNewFileSide" class="icon-btn" title="New File...">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M9.5 1.1l3.4 3.5.1.4v2h-1V6H8V2H3v11h4v1H2.5l-.5-.5v-12l.5-.5h6.7l.3.1zM9 2v3h2.9L9 2zm4 14h-1v-3H9v-1h3V9h1v3h3v1h-3v3z"/></svg>
           </button>
           <button id="btnRenameFile" class="icon-btn" title="Rename Active File">
@@ -154,21 +159,25 @@
             <span>FILE HEADERS</span>
           </div>
           <code><span class="tok-header">#UI//</span> &rarr; Layout &amp; CSS</code>
-          <code><span class="tok-header">#Y//</span>  &rarr; Indented JS Logic</code>
+          <code><span class="tok-header">#Y//</span>  &rarr; AI Swift-like JS</code>
         </div>
       </div>
     </aside>
 
-    <!-- Main Editor Area -->
     <main class="editor-area">
-      
-      
-      <!-- Breadcrumb Bar -->
+      <div class="tab-bar-wrapper">
+        <div class="tab-bar" id="tabBar"></div>
+        <div class="tab-actions">
+          <button id="btnNewFileTab" class="icon-btn" title="New .ytea File">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 7v1H8v6H7V8H1V7h6V1h1v6h6z"/></svg>
+          </button>
+        </div>
+      </div>
+
       <div class="breadcrumb" id="breadcrumb">
         workspace &rsaquo; main.ytea
       </div>
 
-      <!-- Active .ytea Code Editor -->
       <div class="editor-view active" id="view-code">
         <div class="gutter" id="codeLineNumbers">1</div>
         <div class="code-stage" id="codeStage">
@@ -179,7 +188,6 @@
         </div>
       </div>
 
-      <!-- Compiled dist/index.html View -->
       <div class="editor-view" id="view-output">
         <div class="gutter" id="outLineNumbers">1</div>
         <div class="code-stage">
@@ -187,15 +195,12 @@
         </div>
       </div>
 
-      <!-- Markdown README.md View -->
       <div class="editor-view" id="view-readme">
         <div class="readme-container" id="readmeContent"></div>
       </div>
-
     </main>
   </div>
 
-  <!-- VS Code Status Bar -->
   <footer class="statusbar">
     <div class="status-left">
       <span class="status-remote" title="ytea Compiler Environment">
@@ -216,11 +221,31 @@
       <span class="status-item">UTF-8</span>
       <span class="status-item">LF</span>
       <span class="status-item">{ } YTEA</span>
-      <span class="status-item status-bell" title="Notifications">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M13.38 11.03L12 9.65V6a4 4 0 0 0-3.5-3.97V1.5a.5.5 0 0 0-1 0v.53A4 4 0 0 0 4 6v3.65l-1.38 1.38a.5.5 0 0 0 .35.85h10.06a.5.5 0 0 0 .35-.85zM6.5 13a1.5 1.5 0 0 0 3 0h-3z"/></svg>
-      </span>
     </div>
   </footer>
+
+  <!-- Settings Modal (Only Token) -->
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2>Settings &amp; AI Compiler (BYOK)</h2>
+        <button class="icon-btn" id="btnCloseModal">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14.3 2.3l-.6-.6-5.7 5.7-5.7-5.7-.6.6 5.7 5.7-5.7 5.7.6.6 5.7-5.7 5.7 5.7.6-.6-5.7-5.7z"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Configure your Groq API key for lightning-fast AI compilation.</p>
+        <div class="input-group">
+          <label for="inputHfToken">Groq API Key</label>
+          <input type="password" id="inputHfToken" placeholder="gsk_..." autocomplete="off" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="tb-btn" id="btnCancelModal">Cancel</button>
+        <button class="tb-btn tb-accent" id="btnSaveModal">Save Settings</button>
+      </div>
+    </div>
+  </div>
 
   <div id="toast" class="toast"></div>
 

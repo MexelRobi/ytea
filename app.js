@@ -1,5 +1,7 @@
-const STORAGE_KEY = 'ytea_pure_workspaces_v3';
-const ACTIVE_PROJECT_KEY = 'ytea_pure_active_ws_v3';
+const STORAGE_KEY = 'ytea_groq_workspaces_v1';
+const ACTIVE_PROJECT_KEY = 'ytea_groq_active_ws_v1';
+const GROQ_TOKEN_KEY = 'ytea_groq_token';
+const GROQ_MODEL = 'openai/gpt-oss-120b'; // Extrem schnell & kostenlos über Groq
 
 const DEFAULT_UI_FILE = `#UI//
 div(id="app")
@@ -21,7 +23,7 @@ div(id="app")
     .max-width(420px)
     .width(100%)
 
-    span "YTEA UNIFIED FILES"
+    span "YTEA GROQ ENGINE"
       .display(inline-block)
       .font-size(11px)
       .font-weight(600)
@@ -29,12 +31,12 @@ div(id="app")
       .color(#c586c0)
       .margin-bottom(10px)
 
-    h1 "Logical & Clean."
+    h1 "Lightning Fast AI."
       .font-size(24px)
       .font-weight(600)
       .margin(0 0 10px 0)
 
-    p "Every file ends with .ytea. Start with #UI// for layout and styles, or #Y// for clean, indented JavaScript logic."
+    p "Compilation runs via Groq Cloud API. Configure your gsk_... token in Settings."
       .font-size(14px)
       .color(#94a3b8)
       .line-height(1.55)
@@ -75,21 +77,16 @@ on click @btnReset
 
 const README_HTML = `
 <h1>ytea — Unified Structural Web Language</h1>
-<p><strong>ytea</strong> is a structural reorganization of HTML, CSS, and JavaScript. Everything compiles directly into native browser code with zero mapping overhead.</p>
+<p><strong>ytea</strong> compiles your workspace via the ultra-fast <strong>Groq Cloud API</strong> (Llama 3.3).</p>
 
 <h2>1. File Headers</h2>
 <ul>
-  <li><code>#UI//</code> — Layout &amp; CSS file (compiles to HTML with inline styles).</li>
-  <li><code>#Y//</code> — Logic file (compiles indented blocks into standard JavaScript).</li>
+  <li><code>#UI//</code> — Layout &amp; CSS structure.</li>
+  <li><code>#Y//</code> — Swift-like logic files.</li>
 </ul>
 
-<h2>2. Autocomplete Shortcuts</h2>
-<ul>
-  <li>Type <code>.</code> inside <code>#UI//</code> for instant CSS property suggestions (e.g. <code>.background()</code>, <code>.display()</code>).</li>
-  <li>Type tag names like <code>div</code>, <code>button</code>, <code>input</code> for HTML structure suggestions.</li>
-  <li>Type <code>@</code> inside <code>#Y//</code> to autocomplete any <code>id="..."</code> defined in your UI files.</li>
-  <li>Use <code>Up/Down</code> arrows to navigate and <code>Tab</code> or <code>Enter</code> to insert.</li>
-</ul>
+<h2>2. Groq Compilation</h2>
+<p>Open Settings in the top bar to enter your Groq API key (<code>gsk_...</code>). Compilation sends your workspace files directly to Groq's high-speed inference engine.</p>
 `;
 
 const UI_TAG_SUGGESTIONS = [
@@ -101,10 +98,7 @@ const UI_TAG_SUGGESTIONS = [
   { label: 'button', insert: 'button(id="") ""', kind: 'tag' },
   { label: 'input', insert: 'input(id="" type="text")', kind: 'tag' },
   { label: 'img', insert: 'img(src="" alt="")', kind: 'tag' },
-  { label: 'a', insert: 'a(href="") ""', kind: 'tag' },
-  { label: 'ul', insert: 'ul(id="")', kind: 'tag' },
-  { label: 'li', insert: 'li ""', kind: 'tag' },
-  { label: 'canvas', insert: 'canvas(id="")', kind: 'tag' }
+  { label: 'a', insert: 'a(href="") ""', kind: 'tag' }
 ];
 
 const CSS_MODIFIER_SUGGESTIONS = [
@@ -112,28 +106,16 @@ const CSS_MODIFIER_SUGGESTIONS = [
   '.gap(12px)', '.padding(16px)', '.margin(0)', '.margin-bottom(12px)',
   '.width(100%)', '.max-width(480px)', '.height(100%)', '.min-height(100vh)',
   '.background(#1e293b)', '.color(#ffffff)', '.font-size(14px)', '.font-weight(600)',
-  '.font-family(system-ui, sans-serif)', '.line-height(1.5)', '.letter-spacing(0.05em)',
-  '.text-align(center)', '.border(1px solid #334155)', '.border-radius(8px)',
-  '.box-shadow(0 10px 25px rgba(0,0,0,0.3))', '.cursor(pointer)', '.user-select(none)',
-  '.position(relative)', '.position(absolute)', '.top(0)', '.left(0)',
-  '.grid-template-columns(repeat(16, 24px))', '.overflow(hidden)', '.opacity(1)'
+  '.border(1px solid #334155)', '.border-radius(8px)', '.cursor(pointer)'
 ].map(item => ({ label: item, insert: item, kind: 'css' }));
 
 const Y_KEYWORD_SUGGESTIONS = [
   { label: 'var name = value', insert: 'var ', kind: 'keyword' },
   { label: 'func name()', insert: 'func ', kind: 'keyword' },
   { label: 'on click @id', insert: 'on click @', kind: 'event' },
-  { label: 'on input @id', insert: 'on input @', kind: 'event' },
-  { label: 'on change @id', insert: 'on change @', kind: 'event' },
-  { label: 'on mouseenter @id', insert: 'on mouseenter @', kind: 'event' },
-  { label: 'on mousedown @id', insert: 'on mousedown @', kind: 'event' },
-  { label: 'on keydown @id', insert: 'on keydown @', kind: 'event' },
   { label: 'if condition', insert: 'if ', kind: 'control' },
-  { label: 'else if condition', insert: 'else if ', kind: 'control' },
   { label: 'else', insert: 'else', kind: 'control' },
   { label: 'repeat count', insert: 'repeat ', kind: 'loop' },
-  { label: 'for item in list', insert: 'for item in ', kind: 'loop' },
-  { label: 'while condition', insert: 'while ', kind: 'loop' },
   { label: 'return', insert: 'return ', kind: 'keyword' },
   { label: 'console.log()', insert: 'console.log()', kind: 'builtin' }
 ];
@@ -276,10 +258,7 @@ function triggerAutocomplete() {
   const currentLine = textBefore.split('\n').pop();
   const tokenMatch = currentLine.match(/([.@a-zA-Z0-9_-]+)$/);
 
-  if (!tokenMatch) {
-    hideAutocomplete();
-    return;
-  }
+  if (!tokenMatch) { hideAutocomplete(); return; }
 
   const token = tokenMatch[1];
   acTokenStart = pos - token.length;
@@ -287,24 +266,15 @@ function triggerAutocomplete() {
   let pool = [];
 
   if (mode === 'UI') {
-    if (token.startsWith('.')) {
-      pool = CSS_MODIFIER_SUGGESTIONS;
-    } else if (currentLine.trim() === token) {
-      pool = UI_TAG_SUGGESTIONS;
-    }
+    if (token.startsWith('.')) pool = CSS_MODIFIER_SUGGESTIONS;
+    else if (currentLine.trim() === token) pool = UI_TAG_SUGGESTIONS;
   } else {
-    if (token.startsWith('@')) {
-      pool = collectWorkspaceIds();
-    } else {
-      pool = [...Y_KEYWORD_SUGGESTIONS, ...collectWorkspaceIds()];
-    }
+    if (token.startsWith('@')) pool = collectWorkspaceIds();
+    else pool = [...Y_KEYWORD_SUGGESTIONS, ...collectWorkspaceIds()];
   }
 
   acItems = pool.filter(item => item.label.toLowerCase().startsWith(token.toLowerCase()) && item.label !== token);
-  if (acItems.length === 0) {
-    hideAutocomplete();
-    return;
-  }
+  if (acItems.length === 0) { hideAutocomplete(); return; }
 
   acSelectedIndex = 0;
   renderAutocompleteMenu(textBefore);
@@ -362,215 +332,103 @@ function applyAutocomplete(index) {
 
   codeEditor.value = before + chosen.insert + after;
   let newCursor = acTokenStart + chosen.insert.length;
-  if (chosen.insert.endsWith('()') || chosen.insert.endsWith('""')) {
-    newCursor -= 1;
-  }
+  if (chosen.insert.endsWith('()') || chosen.insert.endsWith('""')) newCursor -= 1;
   codeEditor.selectionStart = codeEditor.selectionEnd = newCursor;
   hideAutocomplete();
   codeEditor.dispatchEvent(new Event('input'));
 }
 
-function restructureUIToHTML(source) {
-  const lines = source.split('\n');
-  const root = { tag: 'root', indent: -1, children: [], styles: [], attrs: '', text: '' };
-  const stack = [root];
-  const voidTags = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
-
-  for (const rawLine of lines) {
-    const trimmed = rawLine.trim();
-    if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('#UI//')) continue;
-    const indent = rawLine.search(/\S/);
-
-    if (trimmed.startsWith('.')) {
-      const match = trimmed.match(/^\.([a-zA-Z0-9_-]+)\((.*)\)$/);
-      if (match) {
-        while (stack.length > 1 && stack[stack.length - 1].indent >= indent) {
-          if (stack[stack.length - 1].indent < indent) break;
-          if (stack[stack.length - 1].indent === indent && stack.length > 2) stack.pop();
-          else break;
-        }
-        const target = stack[stack.length - 1];
-        if (target && target.tag !== 'root') target.styles.push(`${match[1]}: ${match[2]};`);
-        continue;
-      }
-    }
-
-    while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
-    if (trimmed.startsWith('<')) {
-      stack[stack.length - 1].children.push({ raw: trimmed, indent, children: [], styles: [] });
-      continue;
-    }
-
-    const tagMatch = trimmed.match(/^([a-zA-Z0-9-]+)(.*)$/);
-    if (!tagMatch) continue;
-    const tag = tagMatch[1];
-    let rest = tagMatch[2].trim();
-    let attrs = '';
-
-    if (rest.startsWith('(')) {
-      let depth = 0, closeIdx = -1;
-      for (let i = 0; i < rest.length; i++) {
-        if (rest[i] === '(') depth++;
-        if (rest[i] === ')') depth--;
-        if (depth === 0) { closeIdx = i; break; }
-      }
-      if (closeIdx !== -1) {
-        attrs = rest.slice(1, closeIdx).trim();
-        rest = rest.slice(closeIdx + 1).trim();
-      }
-    }
-
-    let text = '';
-    if ((rest.startsWith('"') && rest.endsWith('"')) || (rest.startsWith("'") && rest.endsWith("'"))) {
-      text = rest.slice(1, -1);
-    } else if (rest.length > 0) {
-      text = rest;
-    }
-
-    const node = { tag, indent, attrs, text, styles: [], children: [], isVoid: voidTags.has(tag.toLowerCase()) };
-    stack[stack.length - 1].children.push(node);
-    if (!node.isVoid) stack.push(node);
-  }
-
-  function renderNode(node, depth) {
-    if (node.raw) return '  '.repeat(depth) + node.raw;
-    const pad = '  '.repeat(depth);
-    const attrPart = node.attrs ? ` ${node.attrs}` : '';
-    const stylePart = node.styles.length > 0 ? ` style="${node.styles.join(' ')}"` : '';
-    if (node.isVoid) return `${pad}<${node.tag}${attrPart}${stylePart} />`;
-    if (node.children.length === 0) return `${pad}<${node.tag}${attrPart}${stylePart}>${node.text}</${node.tag}>`;
-
-    const inner = [];
-    if (node.text) inner.push(`${pad}  ${node.text}`);
-    for (const child of node.children) inner.push(renderNode(child, depth + 1));
-    return `${pad}<${node.tag}${attrPart}${stylePart}>\n${inner.join('\n')}\n${pad}</${node.tag}>`;
-  }
-
-  return root.children.map(child => renderNode(child, 1)).join('\n');
-}
-
-function restructureYToJS(source) {
-  const parsedLines = [];
-  for (const raw of source.split('\n')) {
-    const trimmed = raw.trim();
-    if (!trimmed || trimmed.startsWith('#Y//')) continue;
-    parsedLines.push({ indent: raw.search(/\S/), text: trimmed });
-  }
-
-  const output = [];
-  const blockStack = [];
-  const expandRefs = (expr) => expr.replace(/("[^"]*"|'[^']*'|`[^`]*`)|@([a-zA-Z0-9_-]+)/g, (m, q, id) => q || `document.getElementById('${id}')`);
-
-  for (const { indent, text } of parsedLines) {
-    while (blockStack.length > 0 && blockStack[blockStack.length - 1].indent >= indent) {
-      const closed = blockStack.pop();
-      output.push('  '.repeat(blockStack.length + 2) + closed.closer);
-    }
-    const pad = '  '.repeat(blockStack.length + 2);
-
-    if (text.startsWith('//')) { output.push(`${pad}${text}`); continue; }
-    const onMatch = text.match(/^on\s+([a-zA-Z0-9_-]+)\s+@([a-zA-Z0-9_-]+)$/);
-    if (onMatch) {
-      output.push(`${pad}document.getElementById('${onMatch[2]}').addEventListener('${onMatch[1]}', (event) => {`);
-      blockStack.push({ indent, closer: '});' });
-      continue;
-    }
-    const funcMatch = text.match(/^func\s+([a-zA-Z0-9_$]+)\s*\(([^)]*)\)$/);
-    if (funcMatch) {
-      output.push(`${pad}function ${funcMatch[1]}(${funcMatch[2]}) {`);
-      blockStack.push({ indent, closer: '}' });
-      continue;
-    }
-    const elseIfMatch = text.match(/^else\s+if\s+(.+)$/);
-    if (elseIfMatch) {
-      output.push(`${pad}else if (${expandRefs(elseIfMatch[1])}) {`);
-      blockStack.push({ indent, closer: '}' });
-      continue;
-    }
-    if (text === 'else') {
-      output.push(`${pad}else {`);
-      blockStack.push({ indent, closer: '}' });
-      continue;
-    }
-    const ifMatch = text.match(/^if\s+(.+)$/);
-    if (ifMatch) {
-      output.push(`${pad}if (${expandRefs(ifMatch[1])}) {`);
-      blockStack.push({ indent, closer: '}' });
-      continue;
-    }
-    const repeatMatch = text.match(/^repeat\s+(.+)$/);
-    if (repeatMatch) {
-      output.push(`${pad}for (let i = 0; i < ${expandRefs(repeatMatch[1])}; i++) {`);
-      blockStack.push({ indent, closer: '}' });
-      continue;
-    }
-    const forInMatch = text.match(/^for\s+([a-zA-Z0-9_$]+)\s+in\s+(.+)$/);
-    if (forInMatch) {
-      output.push(`${pad}for (const ${forInMatch[1]} of ${expandRefs(forInMatch[2])}) {`);
-      blockStack.push({ indent, closer: '}' });
-      continue;
-    }
-    const whileMatch = text.match(/^while\s+(.+)$/);
-    if (whileMatch) {
-      output.push(`${pad}while (${expandRefs(whileMatch[1])}) {`);
-      blockStack.push({ indent, closer: '}' });
-      continue;
-    }
-    const varMatch = text.match(/^var\s+(.+)$/);
-    if (varMatch) {
-      output.push(`${pad}let ${expandRefs(varMatch[1])};`);
-      continue;
-    }
-    output.push(`${pad}${expandRefs(text)}`);
-  }
-
-  while (blockStack.length > 0) {
-    const closed = blockStack.pop();
-    output.push('  '.repeat(blockStack.length + 2) + closed.closer);
-  }
-  return output.join('\n');
-}
-
-function compileProject(notify = true) {
+async function compileProject(notify = true) {
   const proj = getActiveProject();
   if (!proj) return;
-  const uiParts = [];
-  const jsParts = [];
 
-  for (const file of proj.files) {
-    if (detectFileHeader(file.content) === 'Y') {
-      jsParts.push(`    // --- ${file.name} ---\n` + restructureYToJS(file.content));
-    } else {
-      uiParts.push(`  <!-- ${file.name} -->\n` + restructureUIToHTML(file.content));
-    }
-  }
+  const token = localStorage.getItem(GROQ_TOKEN_KEY);
 
-  lastCompiledDocument = `<!DOCTYPE html>
+  if (!token || !token.trim().startsWith('gsk_')) {
+    lastCompiledDocument = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${escapeHtml(proj.name)}</title>
+  <title>Compilation Error</title>
   <link rel="icon" href="https://mexelrobi.github.io/ytea/favicon.ico" sizes="any">
   <link rel="apple-touch-icon" href="https://mexelrobi.github.io/ytea/apple-touch-icon.png">
-  <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; }
-  </style>
 </head>
-<body>
-${uiParts.join('\n\n')}
-
-  <script>
-${jsParts.join('\n\n')}
-  <\/script>
+<body style="background:#1f1f1f;color:#f14c4c;font-family:sans-serif;padding:40px;">
+  <h2>Groq API Key Required</h2>
+  <p>No valid Groq key found in localStorage. Please open Settings and enter your gsk_... key to compile this project.</p>
 </body>
 </html>`;
+    compiledCode.textContent = lastCompiledDocument;
+    outLineNumbers.innerHTML = '1';
+    statusCompile.textContent = 'Error';
+    if (notify) showToast('Error: Groq API key missing');
+    return;
+  }
 
-  compiledCode.textContent = lastCompiledDocument;
-  outLineNumbers.innerHTML = Array.from({ length: lastCompiledDocument.split('\n').length }, (_, i) => i + 1).join('<br>');
-  statusCompile.textContent = 'Compiled';
-  if (notify) showToast('Project compiled successfully');
+  if (notify) showToast('Compiling workspace via Groq Cloud...');
+  const combinedWorkspace = proj.files.map(f => `// File: ${f.name}\n${f.content}`).join('\n\n');
+  const prompt = `Convert the entire ytea workspace (including all #UI// layout/styles and #Y// Swift-like logic files) into a single clean, fully functional standard HTML5 document with inline CSS and vanilla JavaScript. Include these required favicon links in the <head>:
+<link rel="icon" href="https://mexelrobi.github.io/ytea/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="https://mexelrobi.github.io/ytea/apple-touch-icon.png">
+Output ONLY raw HTML code without markdown code blocks, completely self-contained.\n\n${combinedWorkspace}`;
+
+  try {
+    const response = await fetch(
+  'https://api.groq.com/openai/v1/chat/completions',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token.trim()}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: [
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 4000
+    })
+  }
+);
+
+    if (response.ok) {
+      const data = await response.json();
+      let rawContent = data.choices[0].message.content.trim();
+      if (rawContent.startsWith('```html')) rawContent = rawContent.replace(/^```html\s*/, '');
+      if (rawContent.startsWith('```')) rawContent = rawContent.replace(/^```\s*/, '');
+      if (rawContent.endsWith('```')) rawContent = rawContent.replace(/\s*```$/, '');
+      lastCompiledDocument = rawContent;
+      compiledCode.textContent = lastCompiledDocument;
+      outLineNumbers.innerHTML = Array.from({ length: lastCompiledDocument.split('\n').length }, (_, i) => i + 1).join('<br>');
+      statusCompile.textContent = 'Compiled';
+      if (notify) showToast('Project compiled successfully via Groq');
+    } else {
+      const errText = await response.text();
+      throw new Error(errText);
+    }
+  } catch (err) {
+    lastCompiledDocument = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Groq Compilation Error</title>
+</head>
+<body style="background:#1f1f1f;color:#f14c4c;font-family:sans-serif;padding:40px;">
+  <h2>Groq Compilation Failed</h2>
+  <p>Could not reach Groq API or the model returned an error. Check your API key in Settings.</p>
+  <pre style="background:#2a2a2a;padding:15px;border-radius:6px;color:#d4d4d4;overflow:auto;margin-top:15px;">${escapeHtml(err.message)}</pre>
+</body>
+</html>`;
+    compiledCode.textContent = lastCompiledDocument;
+    outLineNumbers.innerHTML = '1';
+    statusCompile.textContent = 'Groq Error';
+    if (notify) showToast('Groq Compilation failed');
+  }
 }
 
 function renderWorkspaceUI() {
@@ -668,7 +526,7 @@ function switchEditorStage(viewId) {
 function updateEditorVisuals() {
   codeHighlight.innerHTML = highlightYteaFile(codeEditor.value) + '\n';
   codeLineNumbers.innerHTML = Array.from({ length: codeEditor.value.split('\n').length }, (_, i) => i + 1).join('<br>');
-  statusMode.textContent = detectFileHeader(codeEditor.value) === 'Y' ? 'Header: #Y// (Logic)' : 'Header: #UI// (Layout)';
+  statusMode.textContent = detectFileHeader(codeEditor.value) === 'Y' ? 'Header: #Y// (Groq Swift Logic)' : 'Header: #UI// (Layout)';
 }
 
 function updateCursorAndLineHighlight() {
@@ -771,7 +629,6 @@ codeEditor.addEventListener('keydown', (e) => {
   }
 });
 
-// Global Shortcuts (Ctrl+S & Ctrl+Enter)
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
     e.preventDefault();
@@ -782,7 +639,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-document.getElementById('btnNewFile').addEventListener('click', () => {
+function createNewFile() {
   const proj = getActiveProject();
   if (!proj) return;
   let name = prompt('New .ytea file name:', `module-${proj.files.length + 1}.ytea`);
@@ -795,10 +652,12 @@ document.getElementById('btnNewFile').addEventListener('click', () => {
   proj.activeFileId = nf.id;
   saveProjects();
   openCodeFile(nf.id);
-});
+}
 
-document.getElementById('menuNewFile').addEventListener('click', () => document.getElementById('btnNewFile').click());
-document.getElementById('actNewFile').addEventListener('click', () => document.getElementById('btnNewFile').click());
+document.getElementById('btnNewFileTab').addEventListener('click', createNewFile);
+document.getElementById('btnNewFileSide').addEventListener('click', createNewFile);
+document.getElementById('menuNewFile').addEventListener('click', createNewFile);
+document.getElementById('actNewFile').addEventListener('click', createNewFile);
 document.getElementById('actReadme').addEventListener('click', openReadmeView);
 
 document.getElementById('btnRenameFile').addEventListener('click', () => {
@@ -856,11 +715,33 @@ document.getElementById('btnDeleteProject').addEventListener('click', () => {
   }
 });
 
-projectSelect.addEventListener('change', (e) => { 
-  activeProjectId = e.target.value; 
-  saveProjects(); 
-  openCodeFile(getActiveProject().activeFileId); 
-  compileProject(false); 
+projectSelect.addEventListener('change', (e) => {
+  activeProjectId = e.target.value;
+  saveProjects();
+  openCodeFile(getActiveProject().activeFileId);
+  compileProject(false);
+});
+
+const settingsModal = document.getElementById('settingsModal');
+const inputHfToken = document.getElementById('inputHfToken');
+
+function openSettingsModal() {
+  inputHfToken.value = localStorage.getItem(GROQ_TOKEN_KEY) || '';
+  settingsModal.classList.add('visible');
+}
+
+function closeSettingsModal() {
+  settingsModal.classList.remove('visible');
+}
+
+document.getElementById('btnSettings').addEventListener('click', openSettingsModal);
+document.getElementById('actSettings').addEventListener('click', openSettingsModal);
+document.getElementById('btnCloseModal').addEventListener('click', closeSettingsModal);
+document.getElementById('btnCancelModal').addEventListener('click', closeSettingsModal);
+document.getElementById('btnSaveModal').addEventListener('click', () => {
+  localStorage.setItem(GROQ_TOKEN_KEY, inputHfToken.value.trim());
+  closeSettingsModal();
+  showToast('Groq settings saved successfully');
 });
 
 document.getElementById('navCompiledOutput').addEventListener('click', openOutputView);
@@ -870,7 +751,6 @@ document.getElementById('menuCompile').addEventListener('click', () => compilePr
 document.getElementById('btnPreview').addEventListener('click', openPreviewPopup);
 document.getElementById('menuPreview').addEventListener('click', openPreviewPopup);
 document.getElementById('actPreview').addEventListener('click', openPreviewPopup);
-
 
 document.getElementById('btnExport').addEventListener('click', () => {
   compileProject(false);
