@@ -635,21 +635,30 @@ body {
   border: none;
   font-family: var(--font-code);
   font-size: 13.5px;
+  font-weight: 400;
+  font-style: normal;
   line-height: var(--line);
   tab-size: 2;
   white-space: pre;
   overflow: auto;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+  letter-spacing: 0;
+  word-spacing: 0;
 }
 
 .code-highlight {
   pointer-events: none;
   color: #d4e0d8;
   z-index: 1;
+  /* Only the textarea scrolls; keep layers pixel-aligned */
+  overflow: hidden;
 }
 
 .code-input {
   background: transparent;
   color: transparent;
+  -webkit-text-fill-color: transparent;
   caret-color: var(--accent);
   resize: none;
   outline: none;
@@ -664,16 +673,17 @@ body {
   user-select: text;
 }
 
-.tok-header { color: var(--tok-header); font-weight: 700; }
+/* Keep token metrics identical to the textarea caret (no bold/italic drift) */
+.tok-header { color: var(--tok-header); }
 .tok-tag { color: var(--tok-tag); }
 .tok-attr { color: var(--tok-attr); }
 .tok-str { color: var(--tok-str); }
 .tok-mod { color: var(--tok-mod); }
 .tok-val { color: var(--tok-val); }
-.tok-kw { color: var(--tok-kw); font-weight: 500; }
+.tok-kw { color: var(--tok-kw); }
 .tok-ref { color: var(--tok-ref); }
 .tok-num { color: var(--tok-num); }
-.tok-comment { color: var(--tok-comment); font-style: italic; }
+.tok-comment { color: var(--tok-comment); }
 
 /* README / Docs browser */
 .readme-container {

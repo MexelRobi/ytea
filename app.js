@@ -496,11 +496,20 @@ function highlightYteaFile(code) {
       return escapeHtml(line);
     }
 
+    // Placeholder-pass so keyword "class" never matches inside <span class="...">.
+    // Markers use _digits_ so \b(\d+)\b cannot eat the slot index.
+    const slots = [];
+    const slot = (html) => {
+      const i = slots.length;
+      slots.push(html);
+      return `\uE000_${i}_\uE001`;
+    };
     let escaped = escapeHtml(trimmed);
-    escaped = escaped.replace(/(`[^`]*`|"[^"]*"|'[^']*')/g, '<span class="tok-str">$1</span>');
-    escaped = escaped.replace(/@([a-zA-Z0-9_-]+)/g, '<span class="tok-ref">@$1</span>');
-    escaped = escaped.replace(/\b(var|let|const|func|on|once|if|else|unless|repeat|for|each|in|while|until|try|catch|wait|every|return|stop|skip|log|say|ask|show|hide|toggle|focus|clear|enable|disable|add|remove|set|append|text|value|style|class|of|to|from|key|load|true|false|null)\b/g, '<span class="tok-kw">$1</span>');
-    escaped = escaped.replace(/\b(\d+)\b/g, '<span class="tok-num">$1</span>');
+    escaped = escaped.replace(/(`[^`]*`|"[^"]*"|'[^']*')/g, (m) => slot(`<span class="tok-str">${m}</span>`));
+    escaped = escaped.replace(/@([a-zA-Z0-9_-]+)/g, (_, id) => slot(`<span class="tok-ref">@${id}</span>`));
+    escaped = escaped.replace(/\b(var|let|const|func|on|once|if|else|unless|repeat|for|each|in|while|until|try|catch|wait|every|return|stop|skip|log|say|ask|show|hide|toggle|focus|clear|enable|disable|add|remove|set|append|text|value|style|class|of|to|from|key|load|true|false|null)\b/g, (m) => slot(`<span class="tok-kw">${m}</span>`));
+    escaped = escaped.replace(/\b(\d+)\b/g, (m) => slot(`<span class="tok-num">${m}</span>`));
+    escaped = escaped.replace(/\uE000_(\d+)_\uE001/g, (_, i) => slots[Number(i)]);
     return `${leadingSpaces}${escaped}`;
   }).join('\n');
 }
@@ -1319,9 +1328,21 @@ function switchEditorStage(viewId) {
   document.getElementById(viewId).classList.add('active');
 }
 
+function syncEditorScroll() {
+  codeHighlight.scrollTop = codeEditor.scrollTop;
+  codeHighlight.scrollLeft = codeEditor.scrollLeft;
+  codeLineNumbers.scrollTop = codeEditor.scrollTop;
+}
+
 function updateEditorVisuals() {
+  // innerHTML resets the highlight layer's scroll — restore from the textarea
+  const sl = codeEditor.scrollLeft;
+  const st = codeEditor.scrollTop;
   codeHighlight.innerHTML = highlightYteaFile(codeEditor.value) + '\n';
   codeLineNumbers.innerHTML = Array.from({ length: codeEditor.value.split('\n').length }, (_, i) => i + 1).join('<br>');
+  codeHighlight.scrollLeft = sl;
+  codeHighlight.scrollTop = st;
+  codeLineNumbers.scrollTop = st;
   statusMode.textContent = detectFileHeader(codeEditor.value) === 'Y' ? '#Y// does' : '#UI// looks';
 }
 
@@ -1359,9 +1380,7 @@ function openPreviewPopup() {
 }
 
 codeEditor.addEventListener('scroll', () => {
-  codeHighlight.scrollTop = codeEditor.scrollTop;
-  codeHighlight.scrollLeft = codeEditor.scrollLeft;
-  codeLineNumbers.scrollTop = codeEditor.scrollTop;
+  syncEditorScroll();
   updateCursorAndLineHighlight();
   hideAutocomplete();
 });
@@ -1381,6 +1400,7 @@ codeEditor.addEventListener('input', () => {
   statusCompile.textContent = 'Modified';
   statusCompile.className = 'status-item warn';
   updateEditorVisuals();
+  syncEditorScroll();
   updateCursorAndLineHighlight();
   scheduleAutocomplete(false);
   renderWorkspaceUI();
