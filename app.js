@@ -34,7 +34,7 @@ div(id="app")
       .font-weight(600)
       .margin(0 0 10px 0)
 
-    p "Every file ends with .ytea. Start with #UI// for layout and styles, or #Y// for Swift-structured JavaScript."
+    p "Every file ends with .ytea. Start with #UI// for layout and styles, or #Y// for clean, indented JavaScript logic."
       .font-size(14px)
       .color(#94a3b8)
       .line-height(1.55)
@@ -80,7 +80,7 @@ const README_HTML = `
 <h2>1. File Headers</h2>
 <ul>
   <li><code>#UI//</code> — Layout &amp; CSS file (compiles to HTML with inline styles).</li>
-  <li><code>#Y//</code> — Logic file (compiles Swift-style indented blocks into standard JavaScript).</li>
+  <li><code>#Y//</code> — Logic file (compiles indented blocks into standard JavaScript).</li>
 </ul>
 
 <h2>2. Autocomplete Shortcuts</h2>
@@ -154,6 +154,7 @@ const tabBar = document.getElementById('tabBar');
 const codeEditor = document.getElementById('codeEditor');
 const codeHighlight = document.getElementById('codeHighlight');
 const codeLineNumbers = document.getElementById('codeLineNumbers');
+const activeLineHighlight = document.getElementById('activeLineHighlight');
 const outLineNumbers = document.getElementById('outLineNumbers');
 const compiledCode = document.getElementById('compiledCode');
 const autocompleteMenu = document.getElementById('autocompleteMenu');
@@ -309,20 +310,30 @@ function triggerAutocomplete() {
   renderAutocompleteMenu(textBefore);
 }
 
+function getSymbolBadge(kind) {
+  if (kind === 'tag') return '<span class="ac-symbol sym-tag">&lt;&gt;</span>';
+  if (kind === 'css') return '<span class="ac-symbol sym-css">#</span>';
+  if (kind === 'element') return '<span class="ac-symbol sym-el">@</span>';
+  return '<span class="ac-symbol sym-kw">ƒ</span>';
+}
+
 function renderAutocompleteMenu(textBefore) {
   const lines = textBefore.split('\n');
   const lineIndex = lines.length - 1;
   const colIndex = lines[lineIndex].length;
 
   const topPx = Math.min((lineIndex + 1) * 21.6 + 16 - codeEditor.scrollTop, codeEditor.clientHeight - 160);
-  const leftPx = Math.min(colIndex * 8.1 + 16 - codeEditor.scrollLeft, codeEditor.clientWidth - 260);
+  const leftPx = Math.min(colIndex * 8.1 + 16 - codeEditor.scrollLeft, codeEditor.clientWidth - 280);
 
   autocompleteMenu.style.top = `${Math.max(10, topPx)}px`;
   autocompleteMenu.style.left = `${Math.max(10, leftPx)}px`;
 
   autocompleteMenu.innerHTML = acItems.map((item, idx) => `
     <div class="ac-item ${idx === acSelectedIndex ? 'selected' : ''}" data-idx="${idx}">
-      <span class="ac-label">${escapeHtml(item.label)}</span>
+      <div class="ac-item-left">
+        ${getSymbolBadge(item.kind)}
+        <span class="ac-label">${escapeHtml(item.label)}</span>
+      </div>
       <span class="ac-kind">${item.kind}</span>
     </div>
   `).join('');
@@ -588,32 +599,36 @@ function renderWorkspaceUI() {
   tabBar.innerHTML = '';
   proj.files.forEach(file => {
     const mode = detectFileHeader(file.content);
+    const isActive = activeViewMode === 'code' && file.id === proj.activeFileId;
     const tab = document.createElement('div');
-    tab.className = 'tab' + (activeViewMode === 'code' && file.id === proj.activeFileId ? ' active' : '');
-    tab.innerHTML = `<span class="file-tag ${mode === 'Y' ? 'tag-y' : 'tag-ui'}">${mode}</span><span>${escapeHtml(file.name)}</span>`;
+    tab.className = 'tab' + (isActive ? ' active' : '');
+    tab.innerHTML = `<span class="file-tag ${mode === 'Y' ? 'tag-y' : 'tag-ui'}">${mode}</span><span>${escapeHtml(file.name)}</span><span class="tab-dot"></span>`;
     tab.addEventListener('click', () => openCodeFile(file.id));
     tabBar.appendChild(tab);
   });
 
   const readmeTab = document.createElement('div');
   readmeTab.className = 'tab' + (activeViewMode === 'readme' ? ' active' : '');
-  readmeTab.innerHTML = `<span class="file-tag tag-md">MD</span><span>README.md</span>`;
-  readmeTab.addEventListener('click', () => {
-    activeViewMode = 'readme';
-    document.getElementById('readmeContent').innerHTML = README_HTML;
-    document.getElementById('windowTitle').textContent = `README.md — ytea`;
-    document.getElementById('breadcrumb').innerHTML = `ytea &rsaquo; README.md`;
-    switchEditorStage('view-readme');
-    renderWorkspaceUI();
-  });
+  readmeTab.innerHTML = `<span class="file-tag tag-md">MD</span><span>README.md</span><span class="tab-dot"></span>`;
+  readmeTab.addEventListener('click', openReadmeView);
   tabBar.appendChild(readmeTab);
 
   const outTab = document.createElement('div');
   outTab.className = 'tab' + (activeViewMode === 'output' ? ' active' : '');
-  outTab.innerHTML = `<span class="file-tag tag-html">&lt;&gt;</span><span>dist/index.html</span>`;
+  outTab.innerHTML = `<span class="file-tag tag-html">&lt;&gt;</span><span>dist/index.html</span><span class="tab-dot"></span>`;
   outTab.addEventListener('click', openOutputView);
   tabBar.appendChild(outTab);
+
   document.getElementById('navCompiledOutput').classList.toggle('active', activeViewMode === 'output');
+}
+
+function openReadmeView() {
+  activeViewMode = 'readme';
+  document.getElementById('readmeContent').innerHTML = README_HTML;
+  document.getElementById('windowTitleText').textContent = `README.md — ytea Studio`;
+  document.getElementById('breadcrumb').innerHTML = `ytea &rsaquo; README.md`;
+  switchEditorStage('view-readme');
+  renderWorkspaceUI();
 }
 
 function openCodeFile(fileId) {
@@ -626,7 +641,8 @@ function openCodeFile(fileId) {
   if (file) {
     codeEditor.value = file.content;
     updateEditorVisuals();
-    document.getElementById('windowTitle').textContent = `${file.name} — ${proj.name} — ytea`;
+    updateCursorAndLineHighlight();
+    document.getElementById('windowTitleText').textContent = `${file.name} — ${proj.name} — ytea Studio`;
     document.getElementById('breadcrumb').innerHTML = `${escapeHtml(proj.name)} &rsaquo; ${escapeHtml(file.name)}`;
   }
   switchEditorStage('view-code');
@@ -637,7 +653,7 @@ function openOutputView() {
   activeViewMode = 'output';
   compileProject(false);
   const proj = getActiveProject();
-  document.getElementById('windowTitle').textContent = `dist/index.html — ${proj.name} — ytea`;
+  document.getElementById('windowTitleText').textContent = `dist/index.html — ${proj.name} — ytea Studio`;
   document.getElementById('breadcrumb').innerHTML = `${escapeHtml(proj.name)} &rsaquo; dist &rsaquo; index.html`;
   switchEditorStage('view-output');
   renderWorkspaceUI();
@@ -653,6 +669,18 @@ function updateEditorVisuals() {
   codeHighlight.innerHTML = highlightYteaFile(codeEditor.value) + '\n';
   codeLineNumbers.innerHTML = Array.from({ length: codeEditor.value.split('\n').length }, (_, i) => i + 1).join('<br>');
   statusMode.textContent = detectFileHeader(codeEditor.value) === 'Y' ? 'Header: #Y// (Logic)' : 'Header: #UI// (Layout)';
+}
+
+function updateCursorAndLineHighlight() {
+  const pos = codeEditor.selectionStart || 0;
+  const textBefore = codeEditor.value.substring(0, pos);
+  const lines = textBefore.split('\n');
+  const currentLine = lines.length;
+  const currentCol = lines[lines.length - 1].length + 1;
+
+  statusCursor.textContent = `Ln ${currentLine}, Col ${currentCol}`;
+  const topOffset = (currentLine - 1) * 21.6 + 14 - codeEditor.scrollTop;
+  activeLineHighlight.style.top = `${topOffset}px`;
 }
 
 function openPreviewPopup() {
@@ -675,14 +703,19 @@ codeEditor.addEventListener('scroll', () => {
   codeHighlight.scrollTop = codeEditor.scrollTop;
   codeHighlight.scrollLeft = codeEditor.scrollLeft;
   codeLineNumbers.scrollTop = codeEditor.scrollTop;
+  updateCursorAndLineHighlight();
   hideAutocomplete();
 });
+
+codeEditor.addEventListener('click', updateCursorAndLineHighlight);
+codeEditor.addEventListener('keyup', updateCursorAndLineHighlight);
 
 codeEditor.addEventListener('input', () => {
   const file = getActiveFile();
   if (file) { file.content = codeEditor.value; saveProjects(); }
   statusCompile.textContent = 'Modified';
   updateEditorVisuals();
+  updateCursorAndLineHighlight();
   triggerAutocomplete();
   renderWorkspaceUI();
 });
@@ -738,6 +771,17 @@ codeEditor.addEventListener('keydown', (e) => {
   }
 });
 
+// Global Shortcuts (Ctrl+S & Ctrl+Enter)
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    compileProject(true);
+  } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    openPreviewPopup();
+  }
+});
+
 document.getElementById('btnNewFile').addEventListener('click', () => {
   const proj = getActiveProject();
   if (!proj) return;
@@ -753,7 +797,10 @@ document.getElementById('btnNewFile').addEventListener('click', () => {
   openCodeFile(nf.id);
 });
 
+document.getElementById('menuNewFile').addEventListener('click', () => document.getElementById('btnNewFile').click());
 document.getElementById('actNewFile').addEventListener('click', () => document.getElementById('btnNewFile').click());
+document.getElementById('actReadme').addEventListener('click', openReadmeView);
+
 document.getElementById('btnRenameFile').addEventListener('click', () => {
   const file = getActiveFile();
   if (!file || activeViewMode !== 'code') return;
@@ -764,6 +811,7 @@ document.getElementById('btnRenameFile').addEventListener('click', () => {
     openCodeFile(file.id);
   }
 });
+
 document.getElementById('btnDeleteFile').addEventListener('click', () => {
   const proj = getActiveProject();
   const file = getActiveFile();
@@ -816,10 +864,13 @@ projectSelect.addEventListener('change', (e) => {
 });
 
 document.getElementById('navCompiledOutput').addEventListener('click', openOutputView);
+document.getElementById('actCompile').addEventListener('click', openOutputView);
 document.getElementById('btnCompile').addEventListener('click', () => compileProject(true));
-document.getElementById('actCompile').addEventListener('click', () => compileProject(true));
+document.getElementById('menuCompile').addEventListener('click', () => compileProject(true));
 document.getElementById('btnPreview').addEventListener('click', openPreviewPopup);
+document.getElementById('menuPreview').addEventListener('click', openPreviewPopup);
 document.getElementById('actPreview').addEventListener('click', openPreviewPopup);
+
 
 document.getElementById('btnExport').addEventListener('click', () => {
   compileProject(false);
