@@ -1,7 +1,53 @@
-const STORAGE_KEY = 'ytea_workspaces_v2';
-const ACTIVE_PROJECT_KEY = 'ytea_active_ws_v2';
-const API_TOKEN_KEY = 'ytea_api_token';
-const COMPILER_MODEL = 'openai/gpt-oss-120b';
+const STORAGE_KEY = 'ytea_pure_workspaces_v4';
+const ACTIVE_PROJECT_KEY = 'ytea_pure_active_ws_v4';
+const CATALOG_CACHE_KEY = 'ytea_official_catalog_v1';
+
+const MDN_CSS_URL = 'https://cdn.jsdelivr.net/npm/mdn-data@2.18.0/css/properties.json';
+const HTML_TAGS_URL = 'https://cdn.jsdelivr.net/npm/html-tags@3.3.1/html-tags.json';
+
+const CSS_SMART_DEFAULTS = {
+  display: 'flex',
+  'flex-direction': 'column',
+  'align-items': 'center',
+  'justify-content': 'center',
+  'justify-items': 'center',
+  gap: '12px',
+  padding: '16px',
+  margin: '0',
+  'margin-bottom': '12px',
+  width: '100%',
+  'max-width': '480px',
+  height: 'auto',
+  'min-height': '100vh',
+  background: '#151c18',
+  'background-color': '#151c18',
+  color: '#f3faf5',
+  'font-size': '16px',
+  'font-weight': '600',
+  'font-family': 'system-ui, sans-serif',
+  'line-height': '1.5',
+  'text-align': 'center',
+  border: '1px solid #355040',
+  'border-radius': '10px',
+  'box-shadow': '0 10px 30px rgba(0,0,0,0.25)',
+  cursor: 'pointer',
+  position: 'relative',
+  top: '0',
+  left: '0',
+  right: '0',
+  bottom: '0',
+  overflow: 'hidden',
+  opacity: '1',
+  transform: 'none',
+  transition: '0.2s ease',
+  'grid-template-columns': '1fr 1fr',
+  'z-index': '1'
+};
+
+const VOID_HTML_TAGS = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta',
+  'param', 'source', 'track', 'wbr'
+]);
 
 const DEFAULT_UI_FILE = `#UI//
 div(id="app")
@@ -10,57 +56,58 @@ div(id="app")
   .flex-direction(column)
   .align-items(center)
   .justify-content(center)
-  .background(#111318)
-  .font-family(system-ui, -apple-system, sans-serif)
-  .color(#e2e8f0)
+  .background(#0c100e)
+  .font-family(system-ui, sans-serif)
+  .color(#f3faf5)
   .padding(24px)
 
   div(class="card")
-    .background(#191c24)
-    .border(1px solid #2a2f3d)
-    .border-radius(12px)
-    .padding(32px)
+    .background(#1a231e)
+    .border(1px solid #355040)
+    .border-radius(14px)
+    .padding(28px)
     .max-width(420px)
     .width(100%)
 
-    span "YTEA ENGINE"
+    span "ytea"
       .display(inline-block)
-      .font-size(11px)
-      .font-weight(600)
+      .font-size(12px)
+      .font-weight(700)
       .letter-spacing(0.08em)
-      .color(#c586c0)
+      .color(#3ecf6a)
       .margin-bottom(10px)
 
-    h1 "Lightning Fast Web."
-      .font-size(24px)
-      .font-weight(600)
+    h1 "Make a website."
+      .font-size(26px)
+      .font-weight(700)
       .margin(0 0 10px 0)
 
-    p "Compilation runs via cloud compilation engine. Configure your API key in Settings."
+    p "Write how it looks in #UI//. Write what it does in #Y//. Real HTML + CSS names — nothing fake."
       .font-size(14px)
-      .color(#94a3b8)
+      .color(#7f9587)
       .line-height(1.55)
-      .margin-bottom(22px)
+      .margin-bottom(20px)
 
     div
       .display(flex)
       .gap(10px)
 
       button(id="btnCount") "Count: 0"
-        .background(#0078d4)
-        .color(#ffffff)
+        .background(#3ecf6a)
+        .color(#062012)
         .border(none)
-        .padding(9px 16px)
-        .border-radius(6px)
+        .padding(10px 16px)
+        .border-radius(8px)
         .font-size(13px)
+        .font-weight(700)
         .cursor(pointer)
 
       button(id="btnReset") "Reset"
-        .background(#252526)
-        .color(#cccccc)
-        .border(1px solid #3c3c3c)
-        .padding(9px 14px)
-        .border-radius(6px)
+        .background(#121816)
+        .color(#d7e4db)
+        .border(1px solid #355040)
+        .padding(10px 14px)
+        .border-radius(8px)
         .font-size(13px)
         .cursor(pointer)`;
 
@@ -76,48 +123,93 @@ on click @btnReset
   @btnCount.textContent = "Count: 0"`;
 
 const README_HTML = `
-<h1>ytea — Unified Structural Web Language</h1>
-<p><strong>ytea</strong> compiles your workspace via a high-performance cloud compilation engine into standard, optimized HTML5.</p>
+<h1>ytea is simple</h1>
+<p>You write websites with <strong>real</strong> HTML, CSS, and JavaScript words. ytea only changes the shape of the code — never the meaning. No fake names. No mappings.</p>
 
-<h2>1. File Headers</h2>
+<h2>1. Two kinds of files</h2>
 <ul>
-  <li><code>#UI//</code> — Layout &amp; CSS structure.</li>
-  <li><code>#Y//</code> — Logic &amp; interaction script files.</li>
+  <li><code>#UI//</code> — how it looks (layout + style)</li>
+  <li><code>#Y//</code> — what it does (logic)</li>
 </ul>
 
-<h2>2. Cloud Compilation</h2>
-<p>Open Settings in the top bar to enter your API key (<code>gsk_...</code>). Compilation sends your workspace files directly to the inference engine with strict deterministic controls.</p>
+<h2>2. How #UI// works</h2>
+<ul>
+  <li>Write a tag: <code>button(id="go") "Click"</code></li>
+  <li>Under it, write real CSS with a dot: <code>.background(#3ecf6a)</code></li>
+  <li>Indent kids under parents. That is nesting.</li>
+</ul>
+
+<h2>3. How #Y// works</h2>
+<ul>
+  <li><code>on click @go</code> means: when that button is clicked…</li>
+  <li>Indented lines under it are the steps that happen.</li>
+  <li><code>@go</code> means the element with <code>id="go"</code>.</li>
+</ul>
+
+<h2>4. Autocomplete</h2>
+<ul>
+  <li>HTML tags &amp; CSS properties load from official packages (MDN data + html-tags).</li>
+  <li>Type <code>.</code> for CSS, a tag name for HTML, <code>@</code> for your ids.</li>
+  <li><code>Tab</code> / <code>Enter</code> accept · <code>↑</code><code>↓</code> move · <code>Ctrl+Space</code> open · <code>Esc</code> close</li>
+</ul>
+
+<div class="tip">Rule of thumb: if a 10-year-old can read the words, you are doing it right.</div>
 `;
 
-const UI_TAG_SUGGESTIONS = [
-  { label: 'div', insert: 'div', kind: 'tag' },
-  { label: 'span', insert: 'span ""', kind: 'tag' },
-  { label: 'h1', insert: 'h1 ""', kind: 'tag' },
-  { label: 'h2', insert: 'h2 ""', kind: 'tag' },
-  { label: 'p', insert: 'p ""', kind: 'tag' },
-  { label: 'button', insert: 'button(id="") ""', kind: 'tag' },
-  { label: 'input', insert: 'input(id="" type="text")', kind: 'tag' },
-  { label: 'img', insert: 'img(src="" alt="")', kind: 'tag' },
-  { label: 'a', insert: 'a(href="") ""', kind: 'tag' }
+const FALLBACK_HTML_TAGS = [
+  'div', 'span', 'h1', 'h2', 'h3', 'p', 'button', 'input', 'img', 'a',
+  'ul', 'ol', 'li', 'section', 'header', 'footer', 'nav', 'main', 'form',
+  'label', 'textarea', 'select', 'option', 'canvas', 'video', 'audio'
 ];
 
-const CSS_MODIFIER_SUGGESTIONS = [
-  '.display(flex)', '.flex-direction(column)', '.align-items(center)', '.justify-content(center)',
-  '.gap(12px)', '.padding(16px)', '.margin(0)', '.margin-bottom(12px)',
-  '.width(100%)', '.max-width(480px)', '.height(100%)', '.min-height(100vh)',
-  '.background(#1e293b)', '.color(#ffffff)', '.font-size(14px)', '.font-weight(600)',
-  '.border(1px solid #334155)', '.border-radius(8px)', '.cursor(pointer)'
-].map(item => ({ label: item, insert: item, kind: 'css' }));
+const FALLBACK_CSS_PROPS = Object.keys(CSS_SMART_DEFAULTS);
 
-const Y_KEYWORD_SUGGESTIONS = [
-  { label: 'var name = value', insert: 'var ', kind: 'keyword' },
-  { label: 'func name()', insert: 'func ', kind: 'keyword' },
-  { label: 'on click @id', insert: 'on click @', kind: 'event' },
-  { label: 'if condition', insert: 'if ', kind: 'control' },
-  { label: 'else', insert: 'else', kind: 'control' },
-  { label: 'repeat count', insert: 'repeat ', kind: 'loop' },
-  { label: 'return', insert: 'return ', kind: 'keyword' },
-  { label: 'console.log()', insert: 'console.log()', kind: 'builtin' }
+const Y_LANGUAGE_SUGGESTIONS = [
+  { label: 'var name = value', insert: 'var ', kind: 'keyword', detail: 'Make a box that holds a value' },
+  { label: 'func name()', insert: 'func name()', kind: 'keyword', detail: 'Make a reusable action', cursorBack: 1 },
+  { label: 'on click @id', insert: 'on click @', kind: 'event', detail: 'Run code when something is clicked' },
+  { label: 'on input @id', insert: 'on input @', kind: 'event', detail: 'Run code while typing' },
+  { label: 'on change @id', insert: 'on change @', kind: 'event', detail: 'Run code when a value changes' },
+  { label: 'on mouseenter @id', insert: 'on mouseenter @', kind: 'event', detail: 'Run code when the mouse enters' },
+  { label: 'on keydown @id', insert: 'on keydown @', kind: 'event', detail: 'Run code when a key is pressed' },
+  { label: 'if condition', insert: 'if ', kind: 'keyword', detail: 'Do this only when something is true' },
+  { label: 'else if condition', insert: 'else if ', kind: 'keyword', detail: 'Otherwise try this' },
+  { label: 'else', insert: 'else', kind: 'keyword', detail: 'Otherwise do this' },
+  { label: 'repeat count', insert: 'repeat ', kind: 'keyword', detail: 'Do something many times' },
+  { label: 'for item in list', insert: 'for item in ', kind: 'keyword', detail: 'Go through each thing in a list' },
+  { label: 'while condition', insert: 'while ', kind: 'keyword', detail: 'Keep going while true' },
+  { label: 'return', insert: 'return ', kind: 'keyword', detail: 'Send a value back from a func' }
+];
+
+const JS_MDN_SUGGESTIONS = [
+  { label: 'console.log()', insert: 'console.log()', kind: 'js', detail: 'MDN: print a message to the console', cursorBack: 1 },
+  { label: 'console.warn()', insert: 'console.warn()', kind: 'js', detail: 'MDN: print a warning', cursorBack: 1 },
+  { label: 'console.error()', insert: 'console.error()', kind: 'js', detail: 'MDN: print an error', cursorBack: 1 },
+  { label: 'Math.random()', insert: 'Math.random()', kind: 'js', detail: 'MDN: random number 0…1' },
+  { label: 'Math.floor()', insert: 'Math.floor()', kind: 'js', detail: 'MDN: round down', cursorBack: 1 },
+  { label: 'Math.ceil()', insert: 'Math.ceil()', kind: 'js', detail: 'MDN: round up', cursorBack: 1 },
+  { label: 'Math.round()', insert: 'Math.round()', kind: 'js', detail: 'MDN: round to nearest', cursorBack: 1 },
+  { label: 'Math.max()', insert: 'Math.max()', kind: 'js', detail: 'MDN: biggest number', cursorBack: 1 },
+  { label: 'Math.min()', insert: 'Math.min()', kind: 'js', detail: 'MDN: smallest number', cursorBack: 1 },
+  { label: 'JSON.stringify()', insert: 'JSON.stringify()', kind: 'js', detail: 'MDN: turn an object into text', cursorBack: 1 },
+  { label: 'JSON.parse()', insert: 'JSON.parse()', kind: 'js', detail: 'MDN: turn text into an object', cursorBack: 1 },
+  { label: 'Array.isArray()', insert: 'Array.isArray()', kind: 'js', detail: 'MDN: check if value is an array', cursorBack: 1 },
+  { label: 'Date.now()', insert: 'Date.now()', kind: 'js', detail: 'MDN: current time in milliseconds' },
+  { label: 'setTimeout()', insert: 'setTimeout(() => {\n  \n}, 1000)', kind: 'js', detail: 'MDN: wait, then run code' },
+  { label: 'setInterval()', insert: 'setInterval(() => {\n  \n}, 1000)', kind: 'js', detail: 'MDN: run code again and again' },
+  { label: 'fetch()', insert: 'fetch("")', kind: 'js', detail: 'MDN: load data from the internet', cursorBack: 2 },
+  { label: 'localStorage.setItem()', insert: 'localStorage.setItem("", "")', kind: 'js', detail: 'MDN: save something in the browser', cursorBack: 5 },
+  { label: 'localStorage.getItem()', insert: 'localStorage.getItem("")', kind: 'js', detail: 'MDN: read something from the browser', cursorBack: 2 },
+  { label: 'alert()', insert: 'alert("")', kind: 'js', detail: 'MDN: show a simple popup', cursorBack: 2 },
+  { label: 'prompt()', insert: 'prompt("")', kind: 'js', detail: 'MDN: ask the user a question', cursorBack: 2 },
+  { label: '.textContent', insert: '.textContent', kind: 'js', detail: 'MDN: the text inside an element' },
+  { label: '.value', insert: '.value', kind: 'js', detail: 'MDN: the value of an input' },
+  { label: '.style', insert: '.style.', kind: 'js', detail: 'MDN: change CSS from JavaScript' },
+  { label: '.classList.add()', insert: '.classList.add("")', kind: 'js', detail: 'MDN: add a CSS class', cursorBack: 2 },
+  { label: '.classList.remove()', insert: '.classList.remove("")', kind: 'js', detail: 'MDN: remove a CSS class', cursorBack: 2 },
+  { label: '.classList.toggle()', insert: '.classList.toggle("")', kind: 'js', detail: 'MDN: toggle a CSS class', cursorBack: 2 },
+  { label: '.focus()', insert: '.focus()', kind: 'js', detail: 'MDN: focus an element' },
+  { label: '.addEventListener()', insert: '.addEventListener("", (event) => {\n  \n})', kind: 'js', detail: 'MDN: listen for an event' }
 ];
 
 let projects = [];
@@ -128,6 +220,10 @@ let previewWindowRef = null;
 let acItems = [];
 let acSelectedIndex = 0;
 let acTokenStart = 0;
+let acDebounceTimer = null;
+
+let UI_TAG_SUGGESTIONS = [];
+let CSS_MODIFIER_SUGGESTIONS = [];
 
 const projectSelect = document.getElementById('projectSelect');
 const sidebarProjectName = document.getElementById('sidebarProjectName');
@@ -144,9 +240,129 @@ const statusMode = document.getElementById('statusMode');
 const statusCompile = document.getElementById('statusCompile');
 const statusSave = document.getElementById('statusSave');
 const statusCursor = document.getElementById('statusCursor');
+const statusCatalog = document.getElementById('statusCatalog');
 
 function generateId(prefix) {
   return prefix + '_' + Math.random().toString(36).substring(2, 9);
+}
+
+function buildTagSuggestion(tag) {
+  const t = tag.toLowerCase();
+  let insert = t;
+  let detail = `HTML element <${t}>`;
+  let cursorBack = 0;
+
+  if (t === 'img') {
+    insert = 'img(src="" alt="")';
+    cursorBack = 8;
+    detail = 'HTML image';
+  } else if (t === 'input') {
+    insert = 'input(id="" type="text")';
+    cursorBack = 13;
+    detail = 'HTML input field';
+  } else if (t === 'a') {
+    insert = 'a(href="") ""';
+    cursorBack = 1;
+    detail = 'HTML link';
+  } else if (t === 'button') {
+    insert = 'button(id="") ""';
+    cursorBack = 1;
+    detail = 'HTML button';
+  } else if (VOID_HTML_TAGS.has(t)) {
+    insert = `${t}()`;
+    cursorBack = 1;
+  } else if (['div', 'section', 'header', 'footer', 'main', 'nav', 'form', 'ul', 'ol'].includes(t)) {
+    insert = `${t}(id="")`;
+    cursorBack = 1;
+  } else {
+    insert = `${t} ""`;
+    cursorBack = 1;
+  }
+
+  return { label: t, insert, kind: 'tag', detail, cursorBack, source: 'html-tags' };
+}
+
+function buildCssSuggestion(prop, meta = {}) {
+  const initial = meta.initial;
+  let value = CSS_SMART_DEFAULTS[prop];
+  if (value == null && typeof initial === 'string' && initial.length < 40 && !initial.includes("'") && !initial.includes('[')) {
+    value = initial;
+  }
+  if (value == null) value = '';
+  const insert = `.${prop}(${value})`;
+  const syntax = typeof meta.syntax === 'string' ? meta.syntax.replace(/\s+/g, ' ').slice(0, 90) : '';
+  const group = Array.isArray(meta.groups) && meta.groups[0] ? meta.groups[0] : 'CSS';
+  const detail = syntax ? `${group} · ${syntax}` : `${group} property`;
+  return {
+    label: `.${prop}`,
+    insert,
+    kind: 'css',
+    detail,
+    cursorBack: value ? 0 : 1,
+    source: 'mdn-data'
+  };
+}
+
+function applyFallbackCatalogs() {
+  UI_TAG_SUGGESTIONS = FALLBACK_HTML_TAGS.map(buildTagSuggestion);
+  CSS_MODIFIER_SUGGESTIONS = FALLBACK_CSS_PROPS.map(p => buildCssSuggestion(p));
+}
+
+function setCatalogStatus(text, ok = false) {
+  if (!statusCatalog) return;
+  statusCatalog.textContent = text;
+  statusCatalog.className = 'status-item' + (ok ? ' ok' : ' warn');
+}
+
+async function loadOfficialCatalogs() {
+  applyFallbackCatalogs();
+  setCatalogStatus('Hints: loading…');
+
+  try {
+    const cached = localStorage.getItem(CATALOG_CACHE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed && Array.isArray(parsed.tags) && Array.isArray(parsed.css) && Date.now() - parsed.savedAt < 1000 * 60 * 60 * 24 * 7) {
+        UI_TAG_SUGGESTIONS = parsed.tags;
+        CSS_MODIFIER_SUGGESTIONS = parsed.css;
+        setCatalogStatus(`Hints: ${parsed.css.length} CSS · ${parsed.tags.length} HTML`, true);
+        return;
+      }
+    }
+  } catch (_) { /* ignore bad cache */ }
+
+  try {
+    const [cssRes, tagsRes] = await Promise.all([
+      fetch(MDN_CSS_URL),
+      fetch(HTML_TAGS_URL)
+    ]);
+    if (!cssRes.ok || !tagsRes.ok) throw new Error('catalog fetch failed');
+
+    const cssJson = await cssRes.json();
+    const tagsJson = await tagsRes.json();
+
+    const tags = (Array.isArray(tagsJson) ? tagsJson : [])
+      .filter(t => typeof t === 'string' && !['html', 'head', 'body', 'script', 'style', 'meta', 'link', 'title'].includes(t))
+      .map(buildTagSuggestion);
+
+    const css = Object.keys(cssJson)
+      .filter(k => !k.startsWith('-') && !k.includes('*') && cssJson[k] && cssJson[k].status !== 'nonstandard')
+      .map(k => buildCssSuggestion(k, cssJson[k]));
+
+    if (tags.length) UI_TAG_SUGGESTIONS = tags;
+    if (css.length) CSS_MODIFIER_SUGGESTIONS = css;
+
+    localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify({
+      savedAt: Date.now(),
+      tags: UI_TAG_SUGGESTIONS,
+      css: CSS_MODIFIER_SUGGESTIONS
+    }));
+
+    setCatalogStatus(`Hints: ${CSS_MODIFIER_SUGGESTIONS.length} CSS · ${UI_TAG_SUGGESTIONS.length} HTML`, true);
+  } catch (err) {
+    console.warn('ytea catalog load failed, using fallback', err);
+    setCatalogStatus(`Hints: offline fallback (${CSS_MODIFIER_SUGGESTIONS.length} CSS)`, false);
+  }
 }
 
 function loadProjects() {
@@ -154,10 +370,10 @@ function loadProjects() {
   if (raw) {
     try { projects = JSON.parse(raw); } catch { projects = []; }
   }
-  if (projects.length === 0) {
+  if (!Array.isArray(projects) || projects.length === 0) {
     const f1 = { id: generateId('file'), name: 'main.ytea', content: DEFAULT_UI_FILE };
     const f2 = { id: generateId('file'), name: 'logic.ytea', content: DEFAULT_Y_FILE };
-    projects.push({ id: generateId('ws'), name: 'starter-app', files: [f1, f2], activeFileId: f1.id });
+    projects = [{ id: generateId('ws'), name: 'my-first-site', files: [f1, f2], activeFileId: f1.id }];
     saveProjects();
   }
   const savedWs = localStorage.getItem(ACTIVE_PROJECT_KEY);
@@ -167,16 +383,16 @@ function loadProjects() {
 function saveProjects() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
   localStorage.setItem(ACTIVE_PROJECT_KEY, activeProjectId);
-  statusSave.textContent = 'Saved';
+  if (statusSave) statusSave.textContent = 'Saved';
 }
 
 function getActiveProject() {
-  return projects.find(p => p.id === activeProjectId);
+  return projects.find(p => p.id === activeProjectId) || projects[0];
 }
 
 function getActiveFile() {
   const proj = getActiveProject();
-  if (!proj) return null;
+  if (!proj || !Array.isArray(proj.files)) return null;
   return proj.files.find(f => f.id === proj.activeFileId) || proj.files[0];
 }
 
@@ -187,6 +403,37 @@ function detectFileHeader(content) {
 
 function escapeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function highlightMatch(label, query) {
+  const safe = escapeHtml(label);
+  if (!query) return safe;
+  const idx = label.toLowerCase().indexOf(query.toLowerCase());
+  if (idx < 0) return safe;
+  const before = escapeHtml(label.slice(0, idx));
+  const mid = escapeHtml(label.slice(idx, idx + query.length));
+  const after = escapeHtml(label.slice(idx + query.length));
+  return `${before}<mark>${mid}</mark>${after}`;
+}
+
+function fuzzyScore(label, query) {
+  const l = label.toLowerCase();
+  const q = query.toLowerCase();
+  if (!q) return 1;
+  if (l === q) return 1000;
+  if (l.startsWith(q)) return 800 - Math.min(l.length, 80);
+  if (l.includes(q)) return 500 - l.indexOf(q);
+
+  let li = 0;
+  let score = 0;
+  for (let qi = 0; qi < q.length; qi++) {
+    const ch = q[qi];
+    const found = l.indexOf(ch, li);
+    if (found < 0) return 0;
+    score += 10 - Math.min(found - li, 9);
+    li = found + 1;
+  }
+  return score;
 }
 
 function highlightYteaFile(code) {
@@ -249,73 +496,122 @@ function collectWorkspaceIds() {
       for (const m of matches) ids.add(m[1]);
     }
   }
-  return Array.from(ids).map(id => ({ label: `@${id}`, insert: `@${id}`, kind: 'element' }));
+  return Array.from(ids).map(id => ({
+    label: `@${id}`,
+    insert: `@${id}`,
+    kind: 'element',
+    detail: `Your element id="${id}"`
+  }));
 }
 
-function triggerAutocomplete() {
+function scheduleAutocomplete(force = false) {
+  clearTimeout(acDebounceTimer);
+  acDebounceTimer = setTimeout(() => triggerAutocomplete(force), force ? 0 : 40);
+}
+
+function triggerAutocomplete(force = false) {
   const pos = codeEditor.selectionStart;
   const textBefore = codeEditor.value.substring(0, pos);
   const currentLine = textBefore.split('\n').pop();
   const tokenMatch = currentLine.match(/([.@a-zA-Z0-9_-]+)$/);
 
-  if (!tokenMatch) { hideAutocomplete(); return; }
+  if (!tokenMatch && !force) {
+    hideAutocomplete();
+    return;
+  }
 
-  const token = tokenMatch[1];
-  acTokenStart = pos - token.length;
+  const token = tokenMatch ? tokenMatch[1] : '';
+  acTokenStart = tokenMatch ? pos - token.length : pos;
   const mode = detectFileHeader(codeEditor.value);
   let pool = [];
 
   if (mode === 'UI') {
-    if (token.startsWith('.')) pool = CSS_MODIFIER_SUGGESTIONS;
-    else if (currentLine.trim() === token) pool = UI_TAG_SUGGESTIONS;
+    if (token.startsWith('.') || (force && currentLine.trim().startsWith('.'))) {
+      pool = CSS_MODIFIER_SUGGESTIONS;
+    } else if (!token || currentLine.trim() === token || /^[a-zA-Z]/.test(token)) {
+      pool = UI_TAG_SUGGESTIONS;
+    }
   } else {
-    if (token.startsWith('@')) pool = collectWorkspaceIds();
-    else pool = [...Y_KEYWORD_SUGGESTIONS, ...collectWorkspaceIds()];
+    if (token.startsWith('@')) {
+      pool = collectWorkspaceIds();
+    } else {
+      pool = [...Y_LANGUAGE_SUGGESTIONS, ...JS_MDN_SUGGESTIONS, ...collectWorkspaceIds()];
+    }
   }
 
-  acItems = pool.filter(item => item.label.toLowerCase().startsWith(token.toLowerCase()) && item.label !== token);
-  if (acItems.length === 0) { hideAutocomplete(); return; }
+  const scored = pool
+    .map(item => ({ item, score: fuzzyScore(item.label, token) }))
+    .filter(x => force ? true : x.score > 0)
+    .filter(x => x.item.label !== token)
+    .sort((a, b) => b.score - a.score || a.item.label.length - b.item.label.length)
+    .slice(0, 60)
+    .map(x => x.item);
+
+  acItems = scored;
+  if (acItems.length === 0) {
+    hideAutocomplete();
+    return;
+  }
 
   acSelectedIndex = 0;
-  renderAutocompleteMenu(textBefore);
+  renderAutocompleteMenu(textBefore, token);
 }
 
 function getSymbolBadge(kind) {
   if (kind === 'tag') return '<span class="ac-symbol sym-tag">&lt;&gt;</span>';
   if (kind === 'css') return '<span class="ac-symbol sym-css">#</span>';
   if (kind === 'element') return '<span class="ac-symbol sym-el">@</span>';
+  if (kind === 'js') return '<span class="ac-symbol sym-js">JS</span>';
+  if (kind === 'event') return '<span class="ac-symbol sym-event">on</span>';
   return '<span class="ac-symbol sym-kw">ƒ</span>';
 }
 
-function renderAutocompleteMenu(textBefore) {
+function renderAutocompleteMenu(textBefore, query = '') {
   const lines = textBefore.split('\n');
   const lineIndex = lines.length - 1;
   const colIndex = lines[lineIndex].length;
+  const charW = 8.15;
+  const lineH = 21.6;
 
-  const topPx = Math.min((lineIndex + 1) * 21.6 + 16 - codeEditor.scrollTop, codeEditor.clientHeight - 160);
-  const leftPx = Math.min(colIndex * 8.1 + 16 - codeEditor.scrollLeft, codeEditor.clientWidth - 280);
+  const topPx = Math.min((lineIndex + 1) * lineH + 16 - codeEditor.scrollTop, codeEditor.clientHeight - 220);
+  const leftPx = Math.min(colIndex * charW + 16 - codeEditor.scrollLeft, codeEditor.clientWidth - 300);
 
-  autocompleteMenu.style.top = `${Math.max(10, topPx)}px`;
-  autocompleteMenu.style.left = `${Math.max(10, leftPx)}px`;
+  autocompleteMenu.style.top = `${Math.max(8, topPx)}px`;
+  autocompleteMenu.style.left = `${Math.max(8, leftPx)}px`;
 
-  autocompleteMenu.innerHTML = acItems.map((item, idx) => `
-    <div class="ac-item ${idx === acSelectedIndex ? 'selected' : ''}" data-idx="${idx}">
-      <div class="ac-item-left">
-        ${getSymbolBadge(item.kind)}
-        <span class="ac-label">${escapeHtml(item.label)}</span>
-      </div>
-      <span class="ac-kind">${item.kind}</span>
+  const selected = acItems[acSelectedIndex] || acItems[0];
+  const listHtml = acItems.map((item, idx) => `
+    <div class="ac-item ${idx === acSelectedIndex ? 'selected' : ''}" data-idx="${idx}" role="option" aria-selected="${idx === acSelectedIndex}">
+      ${getSymbolBadge(item.kind)}
+      <span class="ac-label">${highlightMatch(item.label, query)}</span>
+      <span class="ac-kind">${escapeHtml(item.kind)}</span>
     </div>
   `).join('');
+
+  autocompleteMenu.innerHTML = `
+    <div class="ac-list">${listHtml}</div>
+    <div class="ac-footer">
+      <div class="ac-detail-title">${escapeHtml(selected.label)}</div>
+      <div class="ac-detail-body">${escapeHtml(selected.detail || '')}</div>
+      <div class="ac-hint-keys">Tab / Enter · ↑↓ · Esc · Ctrl+Space</div>
+    </div>
+  `;
 
   autocompleteMenu.querySelectorAll('.ac-item').forEach(el => {
     el.addEventListener('mousedown', (e) => {
       e.preventDefault();
       applyAutocomplete(Number(el.dataset.idx));
     });
+    el.addEventListener('mouseenter', () => {
+      acSelectedIndex = Number(el.dataset.idx);
+      renderAutocompleteMenu(textBefore, query);
+    });
   });
 
   autocompleteMenu.classList.add('visible');
+
+  const selectedEl = autocompleteMenu.querySelector('.ac-item.selected');
+  if (selectedEl) selectedEl.scrollIntoView({ block: 'nearest' });
 }
 
 function hideAutocomplete() {
@@ -329,122 +625,229 @@ function applyAutocomplete(index) {
   const pos = codeEditor.selectionStart;
   const before = codeEditor.value.substring(0, acTokenStart);
   const after = codeEditor.value.substring(pos);
+  const insert = chosen.insert;
 
-  codeEditor.value = before + chosen.insert + after;
-  let newCursor = acTokenStart + chosen.insert.length;
-  if (chosen.insert.endsWith('()') || chosen.insert.endsWith('""')) newCursor -= 1;
+  codeEditor.value = before + insert + after;
+  let newCursor = acTokenStart + insert.length;
+  if (chosen.cursorBack) newCursor -= chosen.cursorBack;
+  else if (insert.endsWith('()') || insert.endsWith('""')) newCursor -= 1;
+
   codeEditor.selectionStart = codeEditor.selectionEnd = newCursor;
   hideAutocomplete();
   codeEditor.dispatchEvent(new Event('input'));
+  codeEditor.focus();
 }
 
-async function compileProject(notify = true) {
+function restructureUIToHTML(source) {
+  const lines = source.split('\n');
+  const root = { tag: 'root', indent: -1, children: [], styles: [], attrs: '', text: '' };
+  const stack = [root];
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('#UI//')) continue;
+    const indent = rawLine.search(/\S/);
+
+    if (trimmed.startsWith('.')) {
+      const match = trimmed.match(/^\.([a-zA-Z0-9_-]+)\((.*)\)$/);
+      if (match) {
+        while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
+        const target = stack[stack.length - 1];
+        if (target && target.tag !== 'root') target.styles.push(`${match[1]}: ${match[2]};`);
+        continue;
+      }
+    }
+
+    // Void tags stay on the stack only so indented .styles() can attach to them.
+    // Before a new element, pop voids — they cannot contain children.
+    while (stack.length > 1 && stack[stack.length - 1].isVoid) stack.pop();
+    while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
+
+    if (trimmed.startsWith('<')) {
+      stack[stack.length - 1].children.push({ raw: trimmed, indent, children: [], styles: [] });
+      continue;
+    }
+
+    const tagMatch = trimmed.match(/^([a-zA-Z0-9-]+)(.*)$/);
+    if (!tagMatch) continue;
+    const tag = tagMatch[1];
+    let rest = tagMatch[2].trim();
+    let attrs = '';
+
+    if (rest.startsWith('(')) {
+      let depth = 0, closeIdx = -1;
+      for (let i = 0; i < rest.length; i++) {
+        if (rest[i] === '(') depth++;
+        if (rest[i] === ')') depth--;
+        if (depth === 0) { closeIdx = i; break; }
+      }
+      if (closeIdx !== -1) {
+        attrs = rest.slice(1, closeIdx).trim();
+        rest = rest.slice(closeIdx + 1).trim();
+      }
+    }
+
+    let text = '';
+    if ((rest.startsWith('"') && rest.endsWith('"')) || (rest.startsWith("'") && rest.endsWith("'"))) {
+      text = rest.slice(1, -1);
+    } else if (rest.length > 0) {
+      text = rest;
+    }
+
+    const node = {
+      tag,
+      indent,
+      attrs,
+      text,
+      styles: [],
+      children: [],
+      isVoid: VOID_HTML_TAGS.has(tag.toLowerCase())
+    };
+    stack[stack.length - 1].children.push(node);
+    // Always push (including void) so following indented styles bind correctly
+    stack.push(node);
+  }
+
+  function renderNode(node, depth) {
+    if (node.raw) return '  '.repeat(depth) + node.raw;
+    const pad = '  '.repeat(depth);
+    const attrPart = node.attrs ? ` ${node.attrs}` : '';
+    const stylePart = node.styles.length > 0 ? ` style="${node.styles.join(' ')}"` : '';
+    if (node.isVoid) return `${pad}<${node.tag}${attrPart}${stylePart} />`;
+    if (node.children.length === 0) return `${pad}<${node.tag}${attrPart}${stylePart}>${node.text}</${node.tag}>`;
+
+    const inner = [];
+    if (node.text) inner.push(`${pad}  ${node.text}`);
+    for (const child of node.children) inner.push(renderNode(child, depth + 1));
+    return `${pad}<${node.tag}${attrPart}${stylePart}>\n${inner.join('\n')}\n${pad}</${node.tag}>`;
+  }
+
+  return root.children.map(child => renderNode(child, 1)).join('\n');
+}
+
+function restructureYToJS(source) {
+  const parsedLines = [];
+  for (const raw of source.split('\n')) {
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed.startsWith('#Y//')) continue;
+    parsedLines.push({ indent: raw.search(/\S/), text: trimmed });
+  }
+
+  const output = [];
+  const blockStack = [];
+  const expandRefs = (expr) => expr.replace(/("[^"]*"|'[^']*'|`[^`]*`)|@([a-zA-Z0-9_-]+)/g, (m, q, id) => q || `document.getElementById('${id}')`);
+
+  for (const { indent, text } of parsedLines) {
+    while (blockStack.length > 0 && blockStack[blockStack.length - 1].indent >= indent) {
+      const closed = blockStack.pop();
+      output.push('  '.repeat(blockStack.length + 2) + closed.closer);
+    }
+    const pad = '  '.repeat(blockStack.length + 2);
+
+    if (text.startsWith('//')) { output.push(`${pad}${text}`); continue; }
+    const onMatch = text.match(/^on\s+([a-zA-Z0-9_-]+)\s+@([a-zA-Z0-9_-]+)$/);
+    if (onMatch) {
+      output.push(`${pad}document.getElementById('${onMatch[2]}').addEventListener('${onMatch[1]}', (event) => {`);
+      blockStack.push({ indent, closer: '});' });
+      continue;
+    }
+    const funcMatch = text.match(/^func\s+([a-zA-Z0-9_$]+)\s*\(([^)]*)\)$/);
+    if (funcMatch) {
+      output.push(`${pad}function ${funcMatch[1]}(${funcMatch[2]}) {`);
+      blockStack.push({ indent, closer: '}' });
+      continue;
+    }
+    const elseIfMatch = text.match(/^else\s+if\s+(.+)$/);
+    if (elseIfMatch) {
+      output.push(`${pad}else if (${expandRefs(elseIfMatch[1])}) {`);
+      blockStack.push({ indent, closer: '}' });
+      continue;
+    }
+    if (text === 'else') {
+      output.push(`${pad}else {`);
+      blockStack.push({ indent, closer: '}' });
+      continue;
+    }
+    const ifMatch = text.match(/^if\s+(.+)$/);
+    if (ifMatch) {
+      output.push(`${pad}if (${expandRefs(ifMatch[1])}) {`);
+      blockStack.push({ indent, closer: '}' });
+      continue;
+    }
+    const repeatMatch = text.match(/^repeat\s+(.+)$/);
+    if (repeatMatch) {
+      output.push(`${pad}for (let i = 0; i < ${expandRefs(repeatMatch[1])}; i++) {`);
+      blockStack.push({ indent, closer: '}' });
+      continue;
+    }
+    const forInMatch = text.match(/^for\s+([a-zA-Z0-9_$]+)\s+in\s+(.+)$/);
+    if (forInMatch) {
+      output.push(`${pad}for (const ${forInMatch[1]} of ${expandRefs(forInMatch[2])}) {`);
+      blockStack.push({ indent, closer: '}' });
+      continue;
+    }
+    const whileMatch = text.match(/^while\s+(.+)$/);
+    if (whileMatch) {
+      output.push(`${pad}while (${expandRefs(whileMatch[1])}) {`);
+      blockStack.push({ indent, closer: '}' });
+      continue;
+    }
+    const varMatch = text.match(/^var\s+(.+)$/);
+    if (varMatch) {
+      output.push(`${pad}let ${expandRefs(varMatch[1])};`);
+      continue;
+    }
+    let stmt = expandRefs(text);
+    if (!/[;{}]$/.test(stmt) && !stmt.startsWith('//')) stmt += ';';
+    output.push(`${pad}${stmt}`);
+  }
+
+  while (blockStack.length > 0) {
+    const closed = blockStack.pop();
+    output.push('  '.repeat(blockStack.length + 2) + closed.closer);
+  }
+  return output.join('\n');
+}
+
+function compileProject(notify = true) {
   const proj = getActiveProject();
   if (!proj) return;
+  const uiParts = [];
+  const jsParts = [];
 
-  const token = localStorage.getItem(API_TOKEN_KEY);
-
-  if (!token || !token.trim().startsWith('gsk_')) {
-    lastCompiledDocument = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Compilation Error</title>
-</head>
-<body style="background:#1f1f1f;color:#f14c4c;font-family:sans-serif;padding:40px;">
-  <h2>API Key Required</h2>
-  <p>No valid API key found in localStorage. Please open Settings and enter your API key to compile this project.</p>
-</body>
-</html>`;
-    compiledCode.textContent = lastCompiledDocument;
-    outLineNumbers.innerHTML = '1';
-    statusCompile.textContent = 'Error';
-    if (notify) showToast('Error: API key missing');
-    return;
-  }
-
-  if (notify) showToast('Compiling workspace...');
-  const combinedWorkspace = proj.files.map(f => `// File: ${f.name}\n${f.content}`).join('\n\n');
-  
-  // Strikte System-Prompt-Anweisung für Determiniertheit und ohne Icon-Links
-  const prompt = `Convert the entire ytea workspace (including all #UI// layout/styles and #Y// logic files) into a single clean, fully functional standard HTML5 document with inline CSS and vanilla JavaScript. 
-CRITICAL CONSTRAINTS:
-- Do NOT include any <link> icon or favicon headers.
-- Return strictly raw HTML without any conversational text or prompt echoing.
-
-Workspace Source:
-${combinedWorkspace}`;
-
-  try {
-    const response = await fetch(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token.trim()}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          model: COMPILER_MODEL,
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a strict, deterministic compiler for the ytea language. Your sole task is to translate the workspace into a single, valid HTML5 document (with inline CSS and vanilla JS). NEVER return explanatory text, NEVER echo the prompt, and DO NOT include any icon or favicon links. Reply EXCLUSIVELY with the raw HTML code.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0,
-          max_tokens: 4000
-        })
-      }
-    );
-
-    if (response.ok) {
-      const data = await response.json();
-      let rawContent = data.choices[0].message.content.trim();
-      
-      // Entfernt eventuelle Markdown-Code-Fences
-      if (rawContent.startsWith('```')) {
-        rawContent = rawContent.replace(/^```[a-zA-Z]*\s*/, '').replace(/\s*```$/, '');
-      }
-      
-      // Schneidet eventuellen Echo-Text vor dem <!DOCTYPE oder <html ab
-      const docStartIndex = rawContent.indexOf('<!DOCTYPE') !== -1 ? rawContent.indexOf('<!DOCTYPE') : rawContent.indexOf('<html');
-      if (docStartIndex > 0) {
-        rawContent = rawContent.substring(docStartIndex);
-      }
-
-      lastCompiledDocument = rawContent;
-      compiledCode.textContent = lastCompiledDocument;
-      outLineNumbers.innerHTML = Array.from({ length: lastCompiledDocument.split('\n').length }, (_, i) => i + 1).join('<br>');
-      statusCompile.textContent = 'Compiled';
-      if (notify) showToast('Project compiled successfully');
+  for (const file of proj.files) {
+    if (detectFileHeader(file.content) === 'Y') {
+      jsParts.push(`    // --- ${file.name} ---\n` + restructureYToJS(file.content));
     } else {
-      const errText = await response.text();
-      throw new Error(errText);
+      uiParts.push(`  <!-- ${file.name} -->\n` + restructureUIToHTML(file.content));
     }
-  } catch (err) {
-    lastCompiledDocument = `<!DOCTYPE html>
+  }
+
+  lastCompiledDocument = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Compilation Error</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${escapeHtml(proj.name)}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; }
+  </style>
 </head>
-<body style="background:#1f1f1f;color:#f14c4c;font-family:sans-serif;padding:40px;">
-  <h2>Compilation Failed</h2>
-  <p>Could not reach compiler API or an error occurred. Check your API key in Settings.</p>
-  <pre style="background:#2a2a2a;padding:15px;border-radius:6px;color:#d4d4d4;overflow:auto;margin-top:15px;">${escapeHtml(err.message)}</pre>
+<body>
+${uiParts.join('\n\n')}
+
+  <script>
+${jsParts.join('\n\n')}
+  <\/script>
 </body>
 </html>`;
-    compiledCode.textContent = lastCompiledDocument;
-    outLineNumbers.innerHTML = '1';
-    statusCompile.textContent = 'API Error';
-    if (notify) showToast('Compilation failed');
-  }
+
+  compiledCode.textContent = lastCompiledDocument;
+  outLineNumbers.innerHTML = Array.from({ length: lastCompiledDocument.split('\n').length }, (_, i) => i + 1).join('<br>');
+  statusCompile.textContent = 'Compiled';
+  statusCompile.className = 'status-item ok';
+  if (notify) showToast('Compiled — real HTML ready');
 }
 
 function renderWorkspaceUI() {
@@ -483,7 +886,7 @@ function renderWorkspaceUI() {
 
   const readmeTab = document.createElement('div');
   readmeTab.className = 'tab' + (activeViewMode === 'readme' ? ' active' : '');
-  readmeTab.innerHTML = `<span class="file-tag tag-md">MD</span><span>README.md</span><span class="tab-dot"></span>`;
+  readmeTab.innerHTML = `<span class="file-tag tag-md">?</span><span>How it works</span><span class="tab-dot"></span>`;
   readmeTab.addEventListener('click', openReadmeView);
   tabBar.appendChild(readmeTab);
 
@@ -499,8 +902,8 @@ function renderWorkspaceUI() {
 function openReadmeView() {
   activeViewMode = 'readme';
   document.getElementById('readmeContent').innerHTML = README_HTML;
-  document.getElementById('windowTitleText').textContent = `README.md — ytea Studio`;
-  document.getElementById('breadcrumb').innerHTML = `ytea &rsaquo; README.md`;
+  document.getElementById('windowTitleText').textContent = 'How ytea works';
+  document.getElementById('breadcrumb').textContent = 'ytea › How it works';
   switchEditorStage('view-readme');
   renderWorkspaceUI();
 }
@@ -516,8 +919,8 @@ function openCodeFile(fileId) {
     codeEditor.value = file.content;
     updateEditorVisuals();
     updateCursorAndLineHighlight();
-    document.getElementById('windowTitleText').textContent = `${file.name} — ${proj.name} — ytea Studio`;
-    document.getElementById('breadcrumb').innerHTML = `${escapeHtml(proj.name)} &rsaquo; ${escapeHtml(file.name)}`;
+    document.getElementById('windowTitleText').textContent = `${file.name} — ${proj.name}`;
+    document.getElementById('breadcrumb').textContent = `${proj.name} › ${file.name}`;
   }
   switchEditorStage('view-code');
   renderWorkspaceUI();
@@ -527,8 +930,8 @@ function openOutputView() {
   activeViewMode = 'output';
   compileProject(false);
   const proj = getActiveProject();
-  document.getElementById('windowTitleText').textContent = `dist/index.html — ${proj.name} — ytea Studio`;
-  document.getElementById('breadcrumb').innerHTML = `${escapeHtml(proj.name)} &rsaquo; dist &rsaquo; index.html`;
+  document.getElementById('windowTitleText').textContent = `dist/index.html — ${proj.name}`;
+  document.getElementById('breadcrumb').textContent = `${proj.name} › dist › index.html`;
   switchEditorStage('view-output');
   renderWorkspaceUI();
 }
@@ -542,7 +945,7 @@ function switchEditorStage(viewId) {
 function updateEditorVisuals() {
   codeHighlight.innerHTML = highlightYteaFile(codeEditor.value) + '\n';
   codeLineNumbers.innerHTML = Array.from({ length: codeEditor.value.split('\n').length }, (_, i) => i + 1).join('<br>');
-  statusMode.textContent = detectFileHeader(codeEditor.value) === 'Y' ? 'Header: #Y// (Logic Script)' : 'Header: #UI// (Layout)';
+  statusMode.textContent = detectFileHeader(codeEditor.value) === 'Y' ? '#Y// does' : '#UI// looks';
 }
 
 function updateCursorAndLineHighlight() {
@@ -559,6 +962,11 @@ function updateCursorAndLineHighlight() {
 
 function openPreviewPopup() {
   compileProject(false);
+  const btn = document.getElementById('btnPreview');
+  btn.classList.remove('flash');
+  void btn.offsetWidth;
+  btn.classList.add('flash');
+
   if (!previewWindowRef || previewWindowRef.closed) {
     previewWindowRef = window.open('', 'YteaPreviewWindow', 'width=1040,height=720,resizable=yes,scrollbars=yes');
   } else {
@@ -569,7 +977,7 @@ function openPreviewPopup() {
     previewWindowRef.document.write(lastCompiledDocument);
     previewWindowRef.document.close();
   } else {
-    showToast('Popup blocked. Please allow popups.');
+    showToast('Popup blocked — please allow popups');
   }
 }
 
@@ -581,31 +989,46 @@ codeEditor.addEventListener('scroll', () => {
   hideAutocomplete();
 });
 
-codeEditor.addEventListener('click', updateCursorAndLineHighlight);
-codeEditor.addEventListener('keyup', updateCursorAndLineHighlight);
+codeEditor.addEventListener('click', () => {
+  updateCursorAndLineHighlight();
+  hideAutocomplete();
+});
+codeEditor.addEventListener('keyup', (e) => {
+  updateCursorAndLineHighlight();
+  if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) hideAutocomplete();
+});
 
 codeEditor.addEventListener('input', () => {
   const file = getActiveFile();
   if (file) { file.content = codeEditor.value; saveProjects(); }
   statusCompile.textContent = 'Modified';
+  statusCompile.className = 'status-item warn';
   updateEditorVisuals();
   updateCursorAndLineHighlight();
-  triggerAutocomplete();
+  scheduleAutocomplete(false);
   renderWorkspaceUI();
 });
 
 codeEditor.addEventListener('keydown', (e) => {
-  if (autocompleteMenu.classList.contains('visible')) {
+  const acOpen = autocompleteMenu.classList.contains('visible');
+
+  if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
+    e.preventDefault();
+    scheduleAutocomplete(true);
+    return;
+  }
+
+  if (acOpen) {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       acSelectedIndex = (acSelectedIndex + 1) % acItems.length;
-      renderAutocompleteMenu(codeEditor.value.substring(0, codeEditor.selectionStart));
+      renderAutocompleteMenu(codeEditor.value.substring(0, codeEditor.selectionStart), (codeEditor.value.substring(0, codeEditor.selectionStart).split('\n').pop().match(/([.@a-zA-Z0-9_-]+)$/) || ['', ''])[1]);
       return;
     }
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       acSelectedIndex = (acSelectedIndex - 1 + acItems.length) % acItems.length;
-      renderAutocompleteMenu(codeEditor.value.substring(0, codeEditor.selectionStart));
+      renderAutocompleteMenu(codeEditor.value.substring(0, codeEditor.selectionStart), (codeEditor.value.substring(0, codeEditor.selectionStart).split('\n').pop().match(/([.@a-zA-Z0-9_-]+)$/) || ['', ''])[1]);
       return;
     }
     if (e.key === 'Tab' || e.key === 'Enter') {
@@ -658,11 +1081,13 @@ document.addEventListener('keydown', (e) => {
 function createNewFile() {
   const proj = getActiveProject();
   if (!proj) return;
-  let name = prompt('New .ytea file name:', `module-${proj.files.length + 1}.ytea`);
+  let name = prompt('New file name:', `page-${proj.files.length + 1}.ytea`);
   if (!name || !name.trim()) return;
   name = name.trim().endsWith('.ytea') ? name.trim() : name.trim() + '.ytea';
-  const type = prompt('Type UI for #UI// or Y for #Y//:', 'Y');
-  const content = (type && type.trim().toUpperCase() === 'Y') ? '#Y//\n' : '#UI//\ndiv\n  .padding(16px)\n';
+  const type = prompt('UI (looks) or Y (does)?', 'UI');
+  const content = (type && type.trim().toUpperCase() === 'Y')
+    ? '#Y//\n'
+    : '#UI//\ndiv(id="box")\n  .padding(16px)\n  h1 "Hello"\n';
   const nf = { id: generateId('file'), name, content };
   proj.files.push(nf);
   proj.activeFileId = nf.id;
@@ -670,8 +1095,8 @@ function createNewFile() {
   openCodeFile(nf.id);
 }
 
+document.getElementById('btnNewFile').addEventListener('click', createNewFile);
 document.getElementById('btnNewFileTab').addEventListener('click', createNewFile);
-document.getElementById('btnNewFileSide').addEventListener('click', createNewFile);
 document.getElementById('menuNewFile').addEventListener('click', createNewFile);
 document.getElementById('actNewFile').addEventListener('click', createNewFile);
 document.getElementById('actReadme').addEventListener('click', openReadmeView);
@@ -700,10 +1125,10 @@ document.getElementById('btnDeleteFile').addEventListener('click', () => {
 });
 
 document.getElementById('btnNewProject').addEventListener('click', () => {
-  const name = prompt('Workspace name:', `project-${projects.length + 1}`);
+  const name = prompt('Project name:', `project-${projects.length + 1}`);
   if (!name || !name.trim()) return;
-  const f1 = { id: generateId('file'), name: 'main.ytea', content: `#UI//\ndiv(id="root")\n  .padding(32px)\n  h1 "${name.trim()}"` };
-  const f2 = { id: generateId('file'), name: 'logic.ytea', content: `#Y//\nconsole.log("${name.trim()} ready")` };
+  const f1 = { id: generateId('file'), name: 'main.ytea', content: `#UI//\ndiv(id="root")\n  .padding(32px)\n  .background(#0c100e)\n  .color(#f3faf5)\n  h1 "${name.trim()}"\n` };
+  const f2 = { id: generateId('file'), name: 'logic.ytea', content: `#Y//\nconsole.log("${name.trim()} ready")\n` };
   const np = { id: generateId('ws'), name: name.trim(), files: [f1, f2], activeFileId: f1.id };
   projects.push(np);
   activeProjectId = np.id;
@@ -715,7 +1140,7 @@ document.getElementById('btnNewProject').addEventListener('click', () => {
 document.getElementById('btnRenameProject').addEventListener('click', () => {
   const proj = getActiveProject();
   if (!proj) return;
-  const n = prompt('Rename workspace:', proj.name);
+  const n = prompt('Rename project:', proj.name);
   if (n && n.trim()) { proj.name = n.trim(); saveProjects(); openCodeFile(proj.activeFileId); }
 });
 
@@ -738,28 +1163,6 @@ projectSelect.addEventListener('change', (e) => {
   compileProject(false);
 });
 
-const settingsModal = document.getElementById('settingsModal');
-const inputHfToken = document.getElementById('inputHfToken');
-
-function openSettingsModal() {
-  inputHfToken.value = localStorage.getItem(API_TOKEN_KEY) || '';
-  settingsModal.classList.add('visible');
-}
-
-function closeSettingsModal() {
-  settingsModal.classList.remove('visible');
-}
-
-document.getElementById('btnSettings').addEventListener('click', openSettingsModal);
-document.getElementById('actSettings').addEventListener('click', openSettingsModal);
-document.getElementById('btnCloseModal').addEventListener('click', closeSettingsModal);
-document.getElementById('btnCancelModal').addEventListener('click', closeSettingsModal);
-document.getElementById('btnSaveModal').addEventListener('click', () => {
-  localStorage.setItem(API_TOKEN_KEY, inputHfToken.value.trim());
-  closeSettingsModal();
-  showToast('Settings saved successfully');
-});
-
 document.getElementById('navCompiledOutput').addEventListener('click', openOutputView);
 document.getElementById('actCompile').addEventListener('click', openOutputView);
 document.getElementById('btnCompile').addEventListener('click', () => compileProject(true));
@@ -775,6 +1178,7 @@ document.getElementById('btnExport').addEventListener('click', () => {
   a.href = URL.createObjectURL(blob);
   a.download = `${getActiveProject().name.toLowerCase().replace(/[^a-z0-9_-]+/g, '-')}.html`;
   a.click();
+  showToast('Exported HTML file');
 });
 
 function showToast(msg) {
@@ -786,5 +1190,7 @@ function showToast(msg) {
 }
 
 loadProjects();
+applyFallbackCatalogs();
 openCodeFile(getActiveProject().activeFileId);
 compileProject(false);
+loadOfficialCatalogs();
