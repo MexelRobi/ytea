@@ -1,7 +1,7 @@
-const STORAGE_KEY = 'ytea_groq_workspaces_v1';
-const ACTIVE_PROJECT_KEY = 'ytea_groq_active_ws_v1';
-const GROQ_TOKEN_KEY = 'ytea_groq_token';
-const GROQ_MODEL = 'openai/gpt-oss-120b'; // Extrem schnell & kostenlos über Groq
+const STORAGE_KEY = 'ytea_workspaces_v2';
+const ACTIVE_PROJECT_KEY = 'ytea_active_ws_v2';
+const API_TOKEN_KEY = 'ytea_api_token';
+const COMPILER_MODEL = 'openai/gpt-oss-120b';
 
 const DEFAULT_UI_FILE = `#UI//
 div(id="app")
@@ -23,7 +23,7 @@ div(id="app")
     .max-width(420px)
     .width(100%)
 
-    span "YTEA GROQ ENGINE"
+    span "YTEA ENGINE"
       .display(inline-block)
       .font-size(11px)
       .font-weight(600)
@@ -31,12 +31,12 @@ div(id="app")
       .color(#c586c0)
       .margin-bottom(10px)
 
-    h1 "Lightning Fast AI."
+    h1 "Lightning Fast Web."
       .font-size(24px)
       .font-weight(600)
       .margin(0 0 10px 0)
 
-    p "Compilation runs via Groq Cloud API. Configure your gsk_... token in Settings."
+    p "Compilation runs via cloud compilation engine. Configure your API key in Settings."
       .font-size(14px)
       .color(#94a3b8)
       .line-height(1.55)
@@ -77,16 +77,16 @@ on click @btnReset
 
 const README_HTML = `
 <h1>ytea — Unified Structural Web Language</h1>
-<p><strong>ytea</strong> compiles your workspace via the ultra-fast <strong>Groq Cloud API</strong> (Llama 3.3).</p>
+<p><strong>ytea</strong> compiles your workspace via a high-performance cloud compilation engine into standard, optimized HTML5.</p>
 
 <h2>1. File Headers</h2>
 <ul>
   <li><code>#UI//</code> — Layout &amp; CSS structure.</li>
-  <li><code>#Y//</code> — Swift-like logic files.</li>
+  <li><code>#Y//</code> — Logic &amp; interaction script files.</li>
 </ul>
 
-<h2>2. Groq Compilation</h2>
-<p>Open Settings in the top bar to enter your Groq API key (<code>gsk_...</code>). Compilation sends your workspace files directly to Groq's high-speed inference engine.</p>
+<h2>2. Cloud Compilation</h2>
+<p>Open Settings in the top bar to enter your API key (<code>gsk_...</code>). Compilation sends your workspace files directly to the inference engine with strict deterministic controls.</p>
 `;
 
 const UI_TAG_SUGGESTIONS = [
@@ -342,7 +342,7 @@ async function compileProject(notify = true) {
   const proj = getActiveProject();
   if (!proj) return;
 
-  const token = localStorage.getItem(GROQ_TOKEN_KEY);
+  const token = localStorage.getItem(API_TOKEN_KEY);
 
   if (!token || !token.trim().startsWith('gsk_')) {
     lastCompiledDocument = `<!DOCTYPE html>
@@ -350,63 +350,79 @@ async function compileProject(notify = true) {
 <head>
   <meta charset="UTF-8" />
   <title>Compilation Error</title>
-  <link rel="icon" href="https://mexelrobi.github.io/ytea/favicon.ico" sizes="any">
-  <link rel="apple-touch-icon" href="https://mexelrobi.github.io/ytea/apple-touch-icon.png">
 </head>
 <body style="background:#1f1f1f;color:#f14c4c;font-family:sans-serif;padding:40px;">
-  <h2>Groq API Key Required</h2>
-  <p>No valid Groq key found in localStorage. Please open Settings and enter your gsk_... key to compile this project.</p>
+  <h2>API Key Required</h2>
+  <p>No valid API key found in localStorage. Please open Settings and enter your API key to compile this project.</p>
 </body>
 </html>`;
     compiledCode.textContent = lastCompiledDocument;
     outLineNumbers.innerHTML = '1';
     statusCompile.textContent = 'Error';
-    if (notify) showToast('Error: Groq API key missing');
+    if (notify) showToast('Error: API key missing');
     return;
   }
 
-  if (notify) showToast('Compiling workspace via Groq Cloud...');
+  if (notify) showToast('Compiling workspace...');
   const combinedWorkspace = proj.files.map(f => `// File: ${f.name}\n${f.content}`).join('\n\n');
-  const prompt = `Convert the entire ytea workspace (including all #UI// layout/styles and #Y// Swift-like logic files) into a single clean, fully functional standard HTML5 document with inline CSS and vanilla JavaScript. Include these required favicon links in the <head>:
-<link rel="icon" href="https://mexelrobi.github.io/ytea/favicon.ico" sizes="any">
-<link rel="apple-touch-icon" href="https://mexelrobi.github.io/ytea/apple-touch-icon.png">
-Output ONLY raw HTML code without markdown code blocks, completely self-contained.\n\n${combinedWorkspace}`;
+  
+  // Strikte System-Prompt-Anweisung für Determiniertheit und ohne Icon-Links
+  const prompt = `Convert the entire ytea workspace (including all #UI// layout/styles and #Y// logic files) into a single clean, fully functional standard HTML5 document with inline CSS and vanilla JavaScript. 
+CRITICAL CONSTRAINTS:
+- Do NOT include any <link> icon or favicon headers.
+- Return strictly raw HTML without any conversational text or prompt echoing.
+
+Workspace Source:
+${combinedWorkspace}`;
 
   try {
     const response = await fetch(
-  'https://api.groq.com/openai/v1/chat/completions',
-  {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token.trim()}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.1,
-      max_tokens: 4000
-    })
-  }
-);
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token.trim()}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          model: COMPILER_MODEL,
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a strict, deterministic compiler for the ytea language. Your sole task is to translate the workspace into a single, valid HTML5 document (with inline CSS and vanilla JS). NEVER return explanatory text, NEVER echo the prompt, and DO NOT include any icon or favicon links. Reply EXCLUSIVELY with the raw HTML code.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0,
+          max_tokens: 4000
+        })
+      }
+    );
 
     if (response.ok) {
       const data = await response.json();
       let rawContent = data.choices[0].message.content.trim();
-      if (rawContent.startsWith('```html')) rawContent = rawContent.replace(/^```html\s*/, '');
-      if (rawContent.startsWith('```')) rawContent = rawContent.replace(/^```\s*/, '');
-      if (rawContent.endsWith('```')) rawContent = rawContent.replace(/\s*```$/, '');
+      
+      // Entfernt eventuelle Markdown-Code-Fences
+      if (rawContent.startsWith('```')) {
+        rawContent = rawContent.replace(/^```[a-zA-Z]*\s*/, '').replace(/\s*```$/, '');
+      }
+      
+      // Schneidet eventuellen Echo-Text vor dem <!DOCTYPE oder <html ab
+      const docStartIndex = rawContent.indexOf('<!DOCTYPE') !== -1 ? rawContent.indexOf('<!DOCTYPE') : rawContent.indexOf('<html');
+      if (docStartIndex > 0) {
+        rawContent = rawContent.substring(docStartIndex);
+      }
+
       lastCompiledDocument = rawContent;
       compiledCode.textContent = lastCompiledDocument;
       outLineNumbers.innerHTML = Array.from({ length: lastCompiledDocument.split('\n').length }, (_, i) => i + 1).join('<br>');
       statusCompile.textContent = 'Compiled';
-      if (notify) showToast('Project compiled successfully via Groq');
+      if (notify) showToast('Project compiled successfully');
     } else {
       const errText = await response.text();
       throw new Error(errText);
@@ -416,18 +432,18 @@ Output ONLY raw HTML code without markdown code blocks, completely self-containe
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Groq Compilation Error</title>
+  <title>Compilation Error</title>
 </head>
 <body style="background:#1f1f1f;color:#f14c4c;font-family:sans-serif;padding:40px;">
-  <h2>Groq Compilation Failed</h2>
-  <p>Could not reach Groq API or the model returned an error. Check your API key in Settings.</p>
+  <h2>Compilation Failed</h2>
+  <p>Could not reach compiler API or an error occurred. Check your API key in Settings.</p>
   <pre style="background:#2a2a2a;padding:15px;border-radius:6px;color:#d4d4d4;overflow:auto;margin-top:15px;">${escapeHtml(err.message)}</pre>
 </body>
 </html>`;
     compiledCode.textContent = lastCompiledDocument;
     outLineNumbers.innerHTML = '1';
-    statusCompile.textContent = 'Groq Error';
-    if (notify) showToast('Groq Compilation failed');
+    statusCompile.textContent = 'API Error';
+    if (notify) showToast('Compilation failed');
   }
 }
 
@@ -526,7 +542,7 @@ function switchEditorStage(viewId) {
 function updateEditorVisuals() {
   codeHighlight.innerHTML = highlightYteaFile(codeEditor.value) + '\n';
   codeLineNumbers.innerHTML = Array.from({ length: codeEditor.value.split('\n').length }, (_, i) => i + 1).join('<br>');
-  statusMode.textContent = detectFileHeader(codeEditor.value) === 'Y' ? 'Header: #Y// (Groq Swift Logic)' : 'Header: #UI// (Layout)';
+  statusMode.textContent = detectFileHeader(codeEditor.value) === 'Y' ? 'Header: #Y// (Logic Script)' : 'Header: #UI// (Layout)';
 }
 
 function updateCursorAndLineHighlight() {
@@ -726,7 +742,7 @@ const settingsModal = document.getElementById('settingsModal');
 const inputHfToken = document.getElementById('inputHfToken');
 
 function openSettingsModal() {
-  inputHfToken.value = localStorage.getItem(GROQ_TOKEN_KEY) || '';
+  inputHfToken.value = localStorage.getItem(API_TOKEN_KEY) || '';
   settingsModal.classList.add('visible');
 }
 
@@ -739,9 +755,9 @@ document.getElementById('actSettings').addEventListener('click', openSettingsMod
 document.getElementById('btnCloseModal').addEventListener('click', closeSettingsModal);
 document.getElementById('btnCancelModal').addEventListener('click', closeSettingsModal);
 document.getElementById('btnSaveModal').addEventListener('click', () => {
-  localStorage.setItem(GROQ_TOKEN_KEY, inputHfToken.value.trim());
+  localStorage.setItem(API_TOKEN_KEY, inputHfToken.value.trim());
   closeSettingsModal();
-  showToast('Groq settings saved successfully');
+  showToast('Settings saved successfully');
 });
 
 document.getElementById('navCompiledOutput').addEventListener('click', openOutputView);
