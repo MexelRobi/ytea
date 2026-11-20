@@ -18,12 +18,14 @@
   --text-muted: #858585;
 
   /* VS Code Dark+ Syntax Tokens */
+  --tok-header: #ff7b72;
   --tok-tag: #4ec9b0;
   --tok-attr: #9cdcfe;
   --tok-str: #ce9178;
   --tok-mod: #c586c0;
   --tok-val: #dcdcaa;
   --tok-kw: #569cd6;
+  --tok-ref: #4fc1ff;
   --tok-num: #b5cea8;
   --tok-comment: #6a9955;
 
@@ -64,14 +66,14 @@ body {
 .titlebar-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .brand-badge {
   font-weight: 700;
   color: var(--text-bright);
   letter-spacing: 0.04em;
-  padding: 2px 6px;
+  padding: 2px 7px;
   background: #252526;
   border: 1px solid #3c3c3c;
   border-radius: 4px;
@@ -106,7 +108,7 @@ body {
   color: var(--text-main);
   border: 1px solid #3c3c3c;
   border-radius: 4px;
-  padding: 3px 10px;
+  padding: 3px 9px;
   font-size: 11.5px;
   cursor: pointer;
 }
@@ -114,6 +116,11 @@ body {
 .tb-btn:hover {
   background: var(--bg-hover);
   color: var(--text-bright);
+}
+
+.tb-danger:hover {
+  color: #f14c4c;
+  border-color: #f14c4c;
 }
 
 .tb-accent {
@@ -126,7 +133,7 @@ body {
   background: var(--accent-hover);
 }
 
-/* Workbench Grid */
+/* Workbench */
 .workbench {
   display: flex;
   flex: 1;
@@ -169,7 +176,7 @@ body {
 
 /* Sidebar Explorer */
 .sidebar {
-  width: 230px;
+  width: 240px;
   background-color: var(--bg-sidebar);
   border-right: 1px solid var(--border);
   display: flex;
@@ -193,8 +200,8 @@ body {
 }
 
 .icon-btn {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   background: transparent;
   border: none;
   border-radius: 3px;
@@ -213,15 +220,22 @@ body {
 
 .tree-section {
   flex: 1;
+  overflow-y: auto;
 }
 
 .tree-folder {
-  padding: 6px 12px;
+  padding: 8px 12px 4px 12px;
   font-size: 11px;
   font-weight: 700;
   color: var(--text-main);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.build-folder {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
 }
 
 .file-tree {
@@ -230,7 +244,7 @@ body {
 
 .file-item {
   height: 26px;
-  padding: 0 18px;
+  padding: 0 16px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -252,12 +266,13 @@ body {
   font-size: 10px;
   font-weight: 700;
   font-family: var(--font-code);
-  width: 18px;
+  width: 22px;
   text-align: center;
 }
 
-.tag-ytea { color: #c586c0; }
-.tag-js { color: #dcdcaa; }
+.tag-ui { color: #c586c0; }
+.tag-y { color: #569cd6; }
+.tag-md { color: #dcdcaa; }
 .tag-html { color: #4ec9b0; }
 
 .sidebar-footer {
@@ -272,14 +287,13 @@ body {
   padding: 8px 10px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .cheat-title {
   font-size: 10px;
   font-weight: 700;
   color: var(--text-muted);
-  margin-bottom: 2px;
 }
 
 .syntax-cheat code {
@@ -303,6 +317,7 @@ body {
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
+  overflow-x: auto;
 }
 
 .tab {
@@ -317,6 +332,7 @@ body {
   border-right: 1px solid var(--border);
   border-top: 2px solid transparent;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .tab:hover {
@@ -327,38 +343,6 @@ body {
   background-color: var(--bg-tab-active);
   color: var(--text-bright);
   border-top-color: var(--accent);
-}
-
-.dirty-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background-color: #cca700;
-  display: none;
-}
-
-.dirty-dot.visible {
-  display: inline-block;
-}
-
-.tab-spacer {
-  flex: 1;
-}
-
-.copy-pill {
-  margin-right: 12px;
-  background: #252526;
-  color: var(--text-main);
-  border: 1px solid #3c3c3c;
-  border-radius: 3px;
-  padding: 3px 9px;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.copy-pill:hover {
-  background: var(--bg-hover);
-  color: var(--text-bright);
 }
 
 .breadcrumb {
@@ -447,17 +431,76 @@ body {
   user-select: text;
 }
 
-/* Syntax Classes */
+/* Syntax Token Classes */
+.tok-header { color: var(--tok-header); font-weight: 700; }
 .tok-tag { color: var(--tok-tag); }
 .tok-attr { color: var(--tok-attr); }
 .tok-str { color: var(--tok-str); }
 .tok-mod { color: var(--tok-mod); }
 .tok-val { color: var(--tok-val); }
-.tok-kw { color: var(--tok-kw); }
+.tok-kw { color: var(--tok-kw); font-weight: 600; }
+.tok-ref { color: var(--tok-ref); }
 .tok-num { color: var(--tok-num); }
 .tok-comment { color: var(--tok-comment); }
 
-/* Bottom Status Bar */
+/* README Documentation View */
+.readme-container {
+  flex: 1;
+  padding: 32px 48px;
+  overflow-y: auto;
+  user-select: text;
+  line-height: 1.65;
+  max-width: 860px;
+}
+
+.readme-container h1 {
+  font-size: 26px;
+  color: var(--text-bright);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+  margin-bottom: 18px;
+}
+
+.readme-container h2 {
+  font-size: 18px;
+  color: #4ec9b0;
+  margin-top: 26px;
+  margin-bottom: 10px;
+}
+
+.readme-container p {
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.readme-container pre {
+  background: #181818;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  font-family: var(--font-code);
+  font-size: 13px;
+  color: #d4d4d4;
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+
+.readme-container code {
+  font-family: var(--font-code);
+  background: #2a2d2e;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 12.5px;
+  color: #ce9178;
+}
+
+.readme-container pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+/* Status Bar */
 .statusbar {
   height: 22px;
   background-color: var(--statusbar-bg);
@@ -511,4 +554,55 @@ body {
 .toast.visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* VS Code IntelliSense Autocomplete Popup */
+.autocomplete-menu {
+  position: absolute;
+  display: none;
+  min-width: 240px;
+  max-width: 340px;
+  max-height: 210px;
+  overflow-y: auto;
+  background-color: #252526;
+  border: 1px solid #454545;
+  border-radius: 4px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+  z-index: 50;
+  font-family: var(--font-code);
+  font-size: 12.5px;
+}
+
+.autocomplete-menu.visible {
+  display: block;
+}
+
+.ac-item {
+  padding: 5px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #cccccc;
+  cursor: pointer;
+}
+
+.ac-item.selected,
+.ac-item:hover {
+  background-color: #04395e;
+  color: #ffffff;
+}
+
+.ac-label {
+  font-weight: 500;
+}
+
+.ac-kind {
+  font-size: 10px;
+  color: #858585;
+  text-transform: uppercase;
+}
+
+.ac-item.selected .ac-kind {
+  color: #9cdcfe;
 }

@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ytea - Web IDE</title>
-  <link rel="stylesheet" href="style.css" />
+  <title>ytea Studio</title>
   <link rel="icon" href="https://mexelrobi.github.io/ytea/favicon.ico" sizes="any">
   <link rel="apple-touch-icon" href="https://mexelrobi.github.io/ytea/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
@@ -16,27 +16,38 @@
       <div class="brand-badge">ytea</div>
       <span class="titlebar-sep">/</span>
       <select id="projectSelect" class="project-dropdown" aria-label="Select Workspace"></select>
+      <button id="btnNewProject" class="tb-btn" title="New Workspace">+ Project</button>
+      <button id="btnRenameProject" class="tb-btn" title="Rename Workspace">Rename</button>
+      <button id="btnDeleteProject" class="tb-btn tb-danger" title="Delete Workspace">Delete</button>
     </div>
 
     <div class="titlebar-center">
-      <span id="windowTitle">structure.ytea — ytea Studio</span>
+      <span id="windowTitle">main.ytea — ytea Studio</span>
     </div>
 
     <div class="titlebar-right">
       <button id="btnCompile" class="tb-btn" title="Compile Project (Ctrl+S)">Compile</button>
       <button id="btnPreview" class="tb-btn tb-accent" title="Open Popup Preview (Ctrl+Enter)">Preview</button>
-      <button id="btnExport" class="tb-btn" title="Download Compiled HTML">Export</button>
+      <button id="btnExport" class="tb-btn" title="Export Single HTML File">Export</button>
     </div>
   </header>
 
   <!-- Main VS Code Workbench -->
   <div class="workbench">
 
-    <!-- Leftmost Activity Bar -->
+    <!-- Activity Bar -->
     <aside class="activity-bar">
-      <button class="act-item active" data-view="explorer" title="Explorer">
+      <button class="act-item active" data-sidebar="explorer" title="Explorer">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
           <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+        </svg>
+      </button>
+      <button class="act-item" id="actNewFile" title="New .ytea File">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="12" y1="18" x2="12" y2="12"/>
+          <line x1="9" y1="15" x2="15" y2="15"/>
         </svg>
       </button>
       <button class="act-item" id="actCompile" title="Compile Output">
@@ -57,24 +68,19 @@
       <div class="sidebar-header">
         <span>EXPLORER</span>
         <div class="sidebar-actions">
-          <button id="btnNewProject" class="icon-btn" title="New Project">+</button>
-          <button id="btnRenameProject" class="icon-btn" title="Rename Project">R</button>
-          <button id="btnDeleteProject" class="icon-btn danger" title="Delete Project">x</button>
+          <button id="btnNewFile" class="icon-btn" title="New .ytea File">+</button>
+          <button id="btnRenameFile" class="icon-btn" title="Rename Active File">R</button>
+          <button id="btnDeleteFile" class="icon-btn danger" title="Delete Active File">x</button>
         </div>
       </div>
 
       <div class="tree-section">
         <div class="tree-folder" id="sidebarProjectName">WORKSPACE</div>
+        <ul class="file-tree" id="fileTreeList"></ul>
+
+        <div class="tree-folder build-folder">BUILD OUTPUT</div>
         <ul class="file-tree">
-          <li class="file-item active" data-file="structure">
-            <span class="file-tag tag-ytea">YT</span>
-            <span>structure.ytea</span>
-          </li>
-          <li class="file-item" data-file="script">
-            <span class="file-tag tag-js">JS</span>
-            <span>script.js</span>
-          </li>
-          <li class="file-item" data-file="output">
+          <li class="file-item" id="navCompiledOutput">
             <span class="file-tag tag-html">&lt;&gt;</span>
             <span>dist/index.html</span>
           </li>
@@ -83,10 +89,9 @@
 
       <div class="sidebar-footer">
         <div class="syntax-cheat">
-          <div class="cheat-title">YTEA SYNTAX</div>
-          <code>tag(id="x") "Text"</code>
-          <code>&nbsp;&nbsp;.color(#38bdf8)</code>
-          <code>&nbsp;&nbsp;.padding(16px)</code>
+          <div class="cheat-title">FILE HEADERS</div>
+          <code>#UI// &rarr; Layout &amp; CSS</code>
+          <code>#Y//  &rarr; Swift-Style JS</code>
         </div>
       </div>
     </aside>
@@ -94,49 +99,25 @@
     <!-- Main Editor Area -->
     <main class="editor-area">
       
-      <!-- Tab Bar -->
-      <div class="tab-bar">
-        <div class="tab active" data-file="structure">
-          <span class="file-tag tag-ytea">YT</span>
-          <span>structure.ytea</span>
-        </div>
-        <div class="tab" data-file="script">
-          <span class="file-tag tag-js">JS</span>
-          <span>script.js</span>
-        </div>
-        <div class="tab" data-file="output">
-          <span class="file-tag tag-html">&lt;&gt;</span>
-          <span>dist/index.html</span>
-          <span id="tabDirtyDot" class="dirty-dot" title="Needs Compile"></span>
-        </div>
-        <div class="tab-spacer"></div>
-        <button id="btnCopyOutput" class="copy-pill">Copy Compiled</button>
-      </div>
+      <!-- Dynamic Tab Bar -->
+      <div class="tab-bar" id="tabBar"></div>
 
       <!-- Breadcrumb Bar -->
       <div class="breadcrumb" id="breadcrumb">
-        workspace &rsaquo; structure.ytea
+        workspace &rsaquo; main.ytea
       </div>
 
-      <!-- Editor View 1: structure.ytea -->
-      <div class="editor-view active" id="view-structure">
-        <div class="gutter" id="htmlLineNumbers">1</div>
-        <div class="code-stage">
-          <pre class="code-highlight" id="htmlHighlight" aria-hidden="true"></pre>
-          <textarea id="htmlEditor" class="code-input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+      <!-- Active .ytea Code Editor -->
+      <div class="editor-view active" id="view-code">
+        <div class="gutter" id="codeLineNumbers">1</div>
+        <div class="code-stage" id="codeStage">
+          <pre class="code-highlight" id="codeHighlight" aria-hidden="true"></pre>
+          <textarea id="codeEditor" class="code-input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+          <div id="autocompleteMenu" class="autocomplete-menu" role="listbox"></div>
         </div>
       </div>
 
-      <!-- Editor View 2: script.js -->
-      <div class="editor-view" id="view-script">
-        <div class="gutter" id="jsLineNumbers">1</div>
-        <div class="code-stage">
-          <pre class="code-highlight" id="jsHighlight" aria-hidden="true"></pre>
-          <textarea id="jsEditor" class="code-input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
-        </div>
-      </div>
-
-      <!-- Editor View 3: Compiled index.html -->
+      <!-- Compiled dist/index.html View -->
       <div class="editor-view" id="view-output">
         <div class="gutter" id="outLineNumbers">1</div>
         <div class="code-stage">
@@ -144,13 +125,19 @@
         </div>
       </div>
 
+      <!-- Markdown README.md View -->
+      <div class="editor-view" id="view-readme">
+        <div class="readme-container" id="readmeContent"></div>
+      </div>
+
     </main>
   </div>
 
-  <!-- VS Code Bottom Status Bar -->
+  <!-- VS Code Status Bar -->
   <footer class="statusbar">
     <div class="status-left">
       <span class="status-remote">ytea</span>
+      <span id="statusMode" class="status-item">Header: #UI//</span>
       <span id="statusCompile" class="status-item">Compiled</span>
       <span id="statusSave" class="status-item">Saved</span>
     </div>
@@ -158,7 +145,7 @@
       <span id="statusCursor" class="status-item">Ln 1, Col 1</span>
       <span class="status-item">Spaces: 2</span>
       <span class="status-item">UTF-8</span>
-      <span id="statusLang" class="status-item">YTEA</span>
+      <span class="status-item">YTEA</span>
     </div>
   </footer>
 
