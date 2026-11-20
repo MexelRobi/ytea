@@ -116,45 +116,31 @@ var count = 0
 
 on click @btnCount
   count += 1
-  @btnCount.textContent = "Count: " + count
+  set text of @btnCount to "Count: " + count
 
 on click @btnReset
   count = 0
-  @btnCount.textContent = "Count: 0"`;
+  set text of @btnCount to "Count: 0"
 
-const README_HTML = `
-<h1>ytea is simple</h1>
-<p>You write websites with <strong>real</strong> HTML, CSS, and JavaScript words. ytea only changes the shape of the code — never the meaning. No fake names. No mappings.</p>
+on load
+  log "ytea ready"`;
 
-<h2>1. Two kinds of files</h2>
-<ul>
-  <li><code>#UI//</code> — how it looks (layout + style)</li>
-  <li><code>#Y//</code> — what it does (logic)</li>
-</ul>
+let docsView = 'readme'; // 'readme' | 'index' | page id
 
-<h2>2. How #UI// works</h2>
-<ul>
-  <li>Write a tag: <code>button(id="go") "Click"</code></li>
-  <li>Under it, write real CSS with a dot: <code>.background(#3ecf6a)</code></li>
-  <li>Indent kids under parents. That is nesting.</li>
-</ul>
-
-<h2>3. How #Y// works</h2>
-<ul>
-  <li><code>on click @go</code> means: when that button is clicked…</li>
-  <li>Indented lines under it are the steps that happen.</li>
-  <li><code>@go</code> means the element with <code>id="go"</code>.</li>
-</ul>
-
-<h2>4. Autocomplete</h2>
-<ul>
-  <li>HTML tags &amp; CSS properties load from official packages (MDN data + html-tags).</li>
-  <li>Type <code>.</code> for CSS, a tag name for HTML, <code>@</code> for your ids.</li>
-  <li><code>Tab</code> / <code>Enter</code> accept · <code>↑</code><code>↓</code> move · <code>Ctrl+Space</code> open · <code>Esc</code> close</li>
-</ul>
-
-<div class="tip">Rule of thumb: if a 10-year-old can read the words, you are doing it right.</div>
-`;
+const DOC_LINK_MAP = {
+  'readme.md': 'readme',
+  '../readme.md': 'readme',
+  'docs/ui-language.md': 'ui-language',
+  'ui-language.md': 'ui-language',
+  'docs/y-language.md': 'y-language',
+  'y-language.md': 'y-language',
+  'docs/examples.md': 'examples',
+  'examples.md': 'examples',
+  'docs/compiler.md': 'compiler',
+  'compiler.md': 'compiler',
+  'docs/cheatsheet.md': 'cheatsheet',
+  'cheatsheet.md': 'cheatsheet'
+};
 
 const FALLBACK_HTML_TAGS = [
   'div', 'span', 'h1', 'h2', 'h3', 'p', 'button', 'input', 'img', 'a',
@@ -170,15 +156,48 @@ const Y_LANGUAGE_SUGGESTIONS = [
   { label: 'on click @id', insert: 'on click @', kind: 'event', detail: 'Run code when something is clicked' },
   { label: 'on input @id', insert: 'on input @', kind: 'event', detail: 'Run code while typing' },
   { label: 'on change @id', insert: 'on change @', kind: 'event', detail: 'Run code when a value changes' },
+  { label: 'on submit @id', insert: 'on submit @', kind: 'event', detail: 'Run code when a form is submitted' },
   { label: 'on mouseenter @id', insert: 'on mouseenter @', kind: 'event', detail: 'Run code when the mouse enters' },
+  { label: 'on mouseleave @id', insert: 'on mouseleave @', kind: 'event', detail: 'Run code when the mouse leaves' },
   { label: 'on keydown @id', insert: 'on keydown @', kind: 'event', detail: 'Run code when a key is pressed' },
+  { label: 'on key "Enter" @id', insert: 'on key "Enter" @', kind: 'event', detail: 'Run code when a specific key is pressed' },
+  { label: 'on load', insert: 'on load', kind: 'event', detail: 'Run code when the page is ready' },
+  { label: 'once click @id', insert: 'once click @', kind: 'event', detail: 'Run once the first time it is clicked' },
   { label: 'if condition', insert: 'if ', kind: 'keyword', detail: 'Do this only when something is true' },
   { label: 'else if condition', insert: 'else if ', kind: 'keyword', detail: 'Otherwise try this' },
   { label: 'else', insert: 'else', kind: 'keyword', detail: 'Otherwise do this' },
+  { label: 'unless condition', insert: 'unless ', kind: 'keyword', detail: 'Do this only when something is false' },
   { label: 'repeat count', insert: 'repeat ', kind: 'keyword', detail: 'Do something many times' },
   { label: 'for item in list', insert: 'for item in ', kind: 'keyword', detail: 'Go through each thing in a list' },
+  { label: 'each item in list', insert: 'each item in ', kind: 'keyword', detail: 'Same as for … in' },
   { label: 'while condition', insert: 'while ', kind: 'keyword', detail: 'Keep going while true' },
-  { label: 'return', insert: 'return ', kind: 'keyword', detail: 'Send a value back from a func' }
+  { label: 'until condition', insert: 'until ', kind: 'keyword', detail: 'Keep going until true' },
+  { label: 'try', insert: 'try', kind: 'keyword', detail: 'Try something that might fail' },
+  { label: 'catch err', insert: 'catch err', kind: 'keyword', detail: 'Handle an error from try' },
+  { label: 'wait 1000', insert: 'wait 1000', kind: 'keyword', detail: 'Pause, then run indented lines (ms)' },
+  { label: 'every 1000', insert: 'every 1000', kind: 'keyword', detail: 'Run indented lines again and again (ms)' },
+  { label: 'return', insert: 'return ', kind: 'keyword', detail: 'Send a value back from a func' },
+  { label: 'stop', insert: 'stop', kind: 'keyword', detail: 'Leave a loop early (break)' },
+  { label: 'skip', insert: 'skip', kind: 'keyword', detail: 'Skip to the next loop turn (continue)' },
+  { label: 'log message', insert: 'log ', kind: 'keyword', detail: 'Print to the browser console' },
+  { label: 'say message', insert: 'say ', kind: 'keyword', detail: 'Show an alert popup' },
+  { label: 'ask question', insert: 'ask ', kind: 'keyword', detail: 'Ask the user and get text back' },
+  { label: 'show @id', insert: 'show @', kind: 'keyword', detail: 'Make an element visible' },
+  { label: 'hide @id', insert: 'hide @', kind: 'keyword', detail: 'Hide an element' },
+  { label: 'toggle @id', insert: 'toggle @', kind: 'keyword', detail: 'Show if hidden, hide if shown' },
+  { label: 'focus @id', insert: 'focus @', kind: 'keyword', detail: 'Put keyboard focus on an element' },
+  { label: 'clear @id', insert: 'clear @', kind: 'keyword', detail: 'Clear text / input value' },
+  { label: 'enable @id', insert: 'enable @', kind: 'keyword', detail: 'Enable a button or input' },
+  { label: 'disable @id', insert: 'disable @', kind: 'keyword', detail: 'Disable a button or input' },
+  { label: 'add class "x" to @id', insert: 'add class "" to @', kind: 'keyword', detail: 'Add a CSS class to an element', cursorBack: 5 },
+  { label: 'remove class "x" from @id', insert: 'remove class "" from @', kind: 'keyword', detail: 'Remove a CSS class', cursorBack: 8 },
+  { label: 'toggle class "x" on @id', insert: 'toggle class "" on @', kind: 'keyword', detail: 'Toggle a CSS class', cursorBack: 5 },
+  { label: 'text of @id', insert: 'text of @', kind: 'keyword', detail: 'Read the text inside an element' },
+  { label: 'value of @id', insert: 'value of @', kind: 'keyword', detail: 'Read the value of an input' },
+  { label: 'set text of @id to', insert: 'set text of @ to ', kind: 'keyword', detail: 'Change the text inside an element' },
+  { label: 'set value of @id to', insert: 'set value of @ to ', kind: 'keyword', detail: 'Change an input value' },
+  { label: 'set style prop of @id to', insert: 'set style  of @ to ', kind: 'keyword', detail: 'Change one CSS style from logic', cursorBack: 8 },
+  { label: 'append text to @id', insert: 'append  to @', kind: 'keyword', detail: 'Add more text inside an element', cursorBack: 5 }
 ];
 
 const JS_MDN_SUGGESTIONS = [
@@ -480,7 +499,7 @@ function highlightYteaFile(code) {
     let escaped = escapeHtml(trimmed);
     escaped = escaped.replace(/(`[^`]*`|"[^"]*"|'[^']*')/g, '<span class="tok-str">$1</span>');
     escaped = escaped.replace(/@([a-zA-Z0-9_-]+)/g, '<span class="tok-ref">@$1</span>');
-    escaped = escaped.replace(/\b(var|let|const|func|on|if|else|repeat|for|in|while|return|true|false|null)\b/g, '<span class="tok-kw">$1</span>');
+    escaped = escaped.replace(/\b(var|let|const|func|on|once|if|else|unless|repeat|for|each|in|while|until|try|catch|wait|every|return|stop|skip|log|say|ask|show|hide|toggle|focus|clear|enable|disable|add|remove|set|append|text|value|style|class|of|to|from|key|load|true|false|null)\b/g, '<span class="tok-kw">$1</span>');
     escaped = escaped.replace(/\b(\d+)\b/g, '<span class="tok-num">$1</span>');
     return `${leadingSpaces}${escaped}`;
   }).join('\n');
@@ -735,7 +754,15 @@ function restructureYToJS(source) {
 
   const output = [];
   const blockStack = [];
-  const expandRefs = (expr) => expr.replace(/("[^"]*"|'[^']*'|`[^`]*`)|@([a-zA-Z0-9_-]+)/g, (m, q, id) => q || `document.getElementById('${id}')`);
+  const expandRefs = (expr) => expr
+    .replace(/\btext of @([a-zA-Z0-9_-]+)/g, "document.getElementById('$1').textContent")
+    .replace(/\bvalue of @([a-zA-Z0-9_-]+)/g, "document.getElementById('$1').value")
+    .replace(/("[^"]*"|'[^']*'|`[^`]*`)|@([a-zA-Z0-9_-]+)/g, (m, q, id) => q || `document.getElementById('${id}')`);
+
+  const quoteOf = (raw) => {
+    if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) return raw;
+    return JSON.stringify(raw);
+  };
 
   for (const { indent, text } of parsedLines) {
     while (blockStack.length > 0 && blockStack[blockStack.length - 1].indent >= indent) {
@@ -745,18 +772,42 @@ function restructureYToJS(source) {
     const pad = '  '.repeat(blockStack.length + 2);
 
     if (text.startsWith('//')) { output.push(`${pad}${text}`); continue; }
+
+    if (text === 'on load' || text === 'when ready' || text === 'when load') {
+      output.push(`${pad}window.addEventListener('DOMContentLoaded', () => {`);
+      blockStack.push({ indent, closer: '});' });
+      continue;
+    }
+
+    const onceMatch = text.match(/^once\s+([a-zA-Z0-9_-]+)\s+@([a-zA-Z0-9_-]+)$/);
+    if (onceMatch) {
+      output.push(`${pad}document.getElementById('${onceMatch[2]}').addEventListener('${onceMatch[1]}', (event) => {`);
+      blockStack.push({ indent, closer: '}, { once: true });' });
+      continue;
+    }
+
+    const onKeyMatch = text.match(/^on\s+key\s+("[^"]+"|'[^']+')\s+@([a-zA-Z0-9_-]+)$/);
+    if (onKeyMatch) {
+      output.push(`${pad}document.getElementById('${onKeyMatch[2]}').addEventListener('keydown', (event) => {`);
+      output.push(`${pad}  if (event.key !== ${onKeyMatch[1]}) return;`);
+      blockStack.push({ indent, closer: '});' });
+      continue;
+    }
+
     const onMatch = text.match(/^on\s+([a-zA-Z0-9_-]+)\s+@([a-zA-Z0-9_-]+)$/);
     if (onMatch) {
       output.push(`${pad}document.getElementById('${onMatch[2]}').addEventListener('${onMatch[1]}', (event) => {`);
       blockStack.push({ indent, closer: '});' });
       continue;
     }
+
     const funcMatch = text.match(/^func\s+([a-zA-Z0-9_$]+)\s*\(([^)]*)\)$/);
     if (funcMatch) {
       output.push(`${pad}function ${funcMatch[1]}(${funcMatch[2]}) {`);
       blockStack.push({ indent, closer: '}' });
       continue;
     }
+
     const elseIfMatch = text.match(/^else\s+if\s+(.+)$/);
     if (elseIfMatch) {
       output.push(`${pad}else if (${expandRefs(elseIfMatch[1])}) {`);
@@ -768,35 +819,171 @@ function restructureYToJS(source) {
       blockStack.push({ indent, closer: '}' });
       continue;
     }
+
+    const unlessMatch = text.match(/^unless\s+(.+)$/);
+    if (unlessMatch) {
+      output.push(`${pad}if (!(${expandRefs(unlessMatch[1])})) {`);
+      blockStack.push({ indent, closer: '}' });
+      continue;
+    }
+
     const ifMatch = text.match(/^if\s+(.+)$/);
     if (ifMatch) {
       output.push(`${pad}if (${expandRefs(ifMatch[1])}) {`);
       blockStack.push({ indent, closer: '}' });
       continue;
     }
+
+    const tryMatch = text.match(/^try$/);
+    if (tryMatch) {
+      output.push(`${pad}try {`);
+      blockStack.push({ indent, closer: '}' });
+      continue;
+    }
+
+    const catchMatch = text.match(/^catch\s+([a-zA-Z0-9_$]+)$/);
+    if (catchMatch) {
+      output.push(`${pad}catch (${catchMatch[1]}) {`);
+      blockStack.push({ indent, closer: '}' });
+      continue;
+    }
+
+    const waitMatch = text.match(/^wait\s+(.+)$/);
+    if (waitMatch) {
+      output.push(`${pad}setTimeout(() => {`);
+      blockStack.push({ indent, closer: `}, ${expandRefs(waitMatch[1])});` });
+      continue;
+    }
+
+    const everyMatch = text.match(/^every\s+(.+)$/);
+    if (everyMatch) {
+      output.push(`${pad}setInterval(() => {`);
+      blockStack.push({ indent, closer: `}, ${expandRefs(everyMatch[1])});` });
+      continue;
+    }
+
     const repeatMatch = text.match(/^repeat\s+(.+)$/);
     if (repeatMatch) {
       output.push(`${pad}for (let i = 0; i < ${expandRefs(repeatMatch[1])}; i++) {`);
       blockStack.push({ indent, closer: '}' });
       continue;
     }
-    const forInMatch = text.match(/^for\s+([a-zA-Z0-9_$]+)\s+in\s+(.+)$/);
+
+    const forInMatch = text.match(/^(?:for|each)\s+([a-zA-Z0-9_$]+)\s+in\s+(.+)$/);
     if (forInMatch) {
       output.push(`${pad}for (const ${forInMatch[1]} of ${expandRefs(forInMatch[2])}) {`);
       blockStack.push({ indent, closer: '}' });
       continue;
     }
+
+    const untilMatch = text.match(/^until\s+(.+)$/);
+    if (untilMatch) {
+      output.push(`${pad}while (!(${expandRefs(untilMatch[1])})) {`);
+      blockStack.push({ indent, closer: '}' });
+      continue;
+    }
+
     const whileMatch = text.match(/^while\s+(.+)$/);
     if (whileMatch) {
       output.push(`${pad}while (${expandRefs(whileMatch[1])}) {`);
       blockStack.push({ indent, closer: '}' });
       continue;
     }
+
+    const varAskMatch = text.match(/^var\s+([a-zA-Z0-9_$]+)\s*=\s*ask\s+(.+)$/);
+    if (varAskMatch) {
+      output.push(`${pad}let ${varAskMatch[1]} = prompt(${expandRefs(varAskMatch[2])});`);
+      continue;
+    }
+
     const varMatch = text.match(/^var\s+(.+)$/);
     if (varMatch) {
       output.push(`${pad}let ${expandRefs(varMatch[1])};`);
       continue;
     }
+
+    if (text === 'stop') { output.push(`${pad}break;`); continue; }
+    if (text === 'skip') { output.push(`${pad}continue;`); continue; }
+
+    const logMatch = text.match(/^log\s+(.+)$/);
+    if (logMatch) { output.push(`${pad}console.log(${expandRefs(logMatch[1])});`); continue; }
+
+    const sayMatch = text.match(/^say\s+(.+)$/);
+    if (sayMatch) { output.push(`${pad}alert(${expandRefs(sayMatch[1])});`); continue; }
+
+    const askMatch = text.match(/^ask\s+(.+)$/);
+    if (askMatch) { output.push(`${pad}prompt(${expandRefs(askMatch[1])});`); continue; }
+
+    const showMatch = text.match(/^show\s+@([a-zA-Z0-9_-]+)$/);
+    if (showMatch) { output.push(`${pad}document.getElementById('${showMatch[1]}').style.display = '';`); continue; }
+
+    const hideMatch = text.match(/^hide\s+@([a-zA-Z0-9_-]+)$/);
+    if (hideMatch) { output.push(`${pad}document.getElementById('${hideMatch[1]}').style.display = 'none';`); continue; }
+
+    const toggleElMatch = text.match(/^toggle\s+@([a-zA-Z0-9_-]+)$/);
+    if (toggleElMatch) {
+      output.push(`${pad}(() => { const __el = document.getElementById('${toggleElMatch[1]}'); __el.style.display = (__el.style.display === 'none') ? '' : 'none'; })();`);
+      continue;
+    }
+
+    const focusMatch = text.match(/^focus\s+@([a-zA-Z0-9_-]+)$/);
+    if (focusMatch) { output.push(`${pad}document.getElementById('${focusMatch[1]}').focus();`); continue; }
+
+    const clearMatch = text.match(/^clear\s+@([a-zA-Z0-9_-]+)$/);
+    if (clearMatch) {
+      output.push(`${pad}(() => { const __el = document.getElementById('${clearMatch[1]}'); if ('value' in __el) __el.value = ''; else __el.textContent = ''; })();`);
+      continue;
+    }
+
+    const enableMatch = text.match(/^enable\s+@([a-zA-Z0-9_-]+)$/);
+    if (enableMatch) { output.push(`${pad}document.getElementById('${enableMatch[1]}').disabled = false;`); continue; }
+
+    const disableMatch = text.match(/^disable\s+@([a-zA-Z0-9_-]+)$/);
+    if (disableMatch) { output.push(`${pad}document.getElementById('${disableMatch[1]}').disabled = true;`); continue; }
+
+    const addClassMatch = text.match(/^add\s+class\s+("[^"]+"|'[^']+'|[^\s]+)\s+to\s+@([a-zA-Z0-9_-]+)$/);
+    if (addClassMatch) {
+      output.push(`${pad}document.getElementById('${addClassMatch[2]}').classList.add(${quoteOf(addClassMatch[1])});`);
+      continue;
+    }
+
+    const removeClassMatch = text.match(/^remove\s+class\s+("[^"]+"|'[^']+'|[^\s]+)\s+from\s+@([a-zA-Z0-9_-]+)$/);
+    if (removeClassMatch) {
+      output.push(`${pad}document.getElementById('${removeClassMatch[2]}').classList.remove(${quoteOf(removeClassMatch[1])});`);
+      continue;
+    }
+
+    const toggleClassMatch = text.match(/^toggle\s+class\s+("[^"]+"|'[^']+'|[^\s]+)\s+on\s+@([a-zA-Z0-9_-]+)$/);
+    if (toggleClassMatch) {
+      output.push(`${pad}document.getElementById('${toggleClassMatch[2]}').classList.toggle(${quoteOf(toggleClassMatch[1])});`);
+      continue;
+    }
+
+    const setTextMatch = text.match(/^set\s+text\s+of\s+@([a-zA-Z0-9_-]+)\s+to\s+(.+)$/);
+    if (setTextMatch) {
+      output.push(`${pad}document.getElementById('${setTextMatch[1]}').textContent = ${expandRefs(setTextMatch[2])};`);
+      continue;
+    }
+
+    const setValueMatch = text.match(/^set\s+value\s+of\s+@([a-zA-Z0-9_-]+)\s+to\s+(.+)$/);
+    if (setValueMatch) {
+      output.push(`${pad}document.getElementById('${setValueMatch[1]}').value = ${expandRefs(setValueMatch[2])};`);
+      continue;
+    }
+
+    const setStyleMatch = text.match(/^set\s+style\s+([a-zA-Z0-9_-]+)\s+of\s+@([a-zA-Z0-9_-]+)\s+to\s+(.+)$/);
+    if (setStyleMatch) {
+      const cssProp = setStyleMatch[1].replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      output.push(`${pad}document.getElementById('${setStyleMatch[2]}').style.${cssProp} = ${expandRefs(setStyleMatch[3])};`);
+      continue;
+    }
+
+    const appendMatch = text.match(/^append\s+(.+)\s+to\s+@([a-zA-Z0-9_-]+)$/);
+    if (appendMatch) {
+      output.push(`${pad}document.getElementById('${appendMatch[2]}').textContent += ${expandRefs(appendMatch[1])};`);
+      continue;
+    }
+
     let stmt = expandRefs(text);
     if (!/[;{}]$/.test(stmt) && !stmt.startsWith('//')) stmt += ';';
     output.push(`${pad}${stmt}`);
@@ -886,8 +1073,11 @@ function renderWorkspaceUI() {
 
   const readmeTab = document.createElement('div');
   readmeTab.className = 'tab' + (activeViewMode === 'readme' ? ' active' : '');
-  readmeTab.innerHTML = `<span class="file-tag tag-md">?</span><span>How it works</span><span class="tab-dot"></span>`;
-  readmeTab.addEventListener('click', openReadmeView);
+  const readmeLabel = docsView === 'index'
+    ? 'Docs'
+    : ((typeof DOC_PAGES !== 'undefined' && DOC_PAGES[docsView]) ? DOC_PAGES[docsView].title : 'README');
+  readmeTab.innerHTML = `<span class="file-tag tag-md">?</span><span>${escapeHtml(readmeLabel)}</span><span class="tab-dot"></span>`;
+  readmeTab.addEventListener('click', () => openReadmeView('readme'));
   tabBar.appendChild(readmeTab);
 
   const outTab = document.createElement('div');
@@ -899,11 +1089,198 @@ function renderWorkspaceUI() {
   document.getElementById('navCompiledOutput').classList.toggle('active', activeViewMode === 'output');
 }
 
-function openReadmeView() {
+function renderInlineMd(text) {
+  let s = escapeHtml(text);
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, href) => {
+    const key = String(href).trim().toLowerCase();
+    const pageId = DOC_LINK_MAP[key] || DOC_LINK_MAP[key.split('/').pop()] || null;
+    if (pageId) return `<a href="#" class="docs-link" data-docs-nav="${pageId}">${label}</a>`;
+    return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener">${label}</a>`;
+  });
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>');
+  return s;
+}
+
+function renderMarkdown(md) {
+  const lines = String(md || '').replace(/\r\n/g, '\n').split('\n');
+  const html = [];
+  let i = 0;
+  let inList = false;
+  let inOl = false;
+
+  const closeLists = () => {
+    if (inList) { html.push('</ul>'); inList = false; }
+    if (inOl) { html.push('</ol>'); inOl = false; }
+  };
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (line.startsWith('```')) {
+      closeLists();
+      const lang = escapeHtml(line.slice(3).trim());
+      const body = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith('```')) {
+        body.push(lines[i]);
+        i++;
+      }
+      html.push(`<pre class="docs-code"${lang ? ` data-lang="${lang}"` : ''}><code>${escapeHtml(body.join('\n'))}</code></pre>`);
+      i++;
+      continue;
+    }
+
+    if (/^\|(.+)\|$/.test(line.trim()) && i + 1 < lines.length && /^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?$/.test(lines[i + 1].trim())) {
+      closeLists();
+      const splitRow = (row) => row.replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+      const headers = splitRow(line.trim());
+      i += 2;
+      const rows = [];
+      while (i < lines.length && /^\|(.+)\|$/.test(lines[i].trim())) {
+        rows.push(splitRow(lines[i].trim()));
+        i++;
+      }
+      html.push('<div class="docs-table-wrap"><table class="docs-table"><thead><tr>' +
+        headers.map(h => `<th>${renderInlineMd(h)}</th>`).join('') +
+        '</tr></thead><tbody>' +
+        rows.map(r => '<tr>' + r.map(c => `<td>${renderInlineMd(c)}</td>`).join('') + '</tr>').join('') +
+        '</tbody></table></div>');
+      continue;
+    }
+
+    if (line.trim() === '---') {
+      closeLists();
+      html.push('<hr class="docs-hr" />');
+      i++;
+      continue;
+    }
+
+    const h = line.match(/^(#{1,3})\s+(.+)$/);
+    if (h) {
+      closeLists();
+      const level = h[1].length;
+      html.push(`<h${level}>${renderInlineMd(h[2])}</h${level}>`);
+      i++;
+      continue;
+    }
+
+    if (/^>\s?/.test(line)) {
+      closeLists();
+      const quote = [];
+      while (i < lines.length && /^>\s?/.test(lines[i])) {
+        quote.push(lines[i].replace(/^>\s?/, ''));
+        i++;
+      }
+      html.push(`<blockquote class="docs-quote">${renderInlineMd(quote.join(' '))}</blockquote>`);
+      continue;
+    }
+
+    if (/^\d+\.\s+/.test(line)) {
+      if (inList) { html.push('</ul>'); inList = false; }
+      if (!inOl) { html.push('<ol>'); inOl = true; }
+      html.push(`<li>${renderInlineMd(line.replace(/^\d+\.\s+/, ''))}</li>`);
+      i++;
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(line)) {
+      if (inOl) { html.push('</ol>'); inOl = false; }
+      if (!inList) { html.push('<ul>'); inList = true; }
+      html.push(`<li>${renderInlineMd(line.replace(/^[-*]\s+/, ''))}</li>`);
+      i++;
+      continue;
+    }
+
+    if (!line.trim()) {
+      closeLists();
+      i++;
+      continue;
+    }
+
+    closeLists();
+    html.push(`<p>${renderInlineMd(line)}</p>`);
+    i++;
+  }
+  closeLists();
+  return html.join('\n');
+}
+
+function docsNavBar(active) {
+  const parts = [
+    `<button type="button" class="docs-crumb${active === 'readme' ? ' current' : ''}" data-docs-nav="readme">README</button>`,
+    '<span class="docs-crumb-sep">/</span>',
+    `<button type="button" class="docs-crumb${active === 'index' ? ' current' : ''}" data-docs-nav="index">Docs</button>`
+  ];
+  if (active !== 'readme' && active !== 'index' && typeof DOC_PAGES !== 'undefined' && DOC_PAGES[active]) {
+    parts.push('<span class="docs-crumb-sep">/</span>');
+    parts.push(`<span class="docs-crumb current">${escapeHtml(DOC_PAGES[active].title)}</span>`);
+  }
+  return `<nav class="docs-nav">${parts.join('')}</nav>`;
+}
+
+function docsIndexHtml() {
+  const pages = typeof DOC_PAGES !== 'undefined'
+    ? Object.values(DOC_PAGES).filter(p => p.id !== 'readme')
+    : [];
+  const cards = pages.map(p => `
+    <button type="button" class="docs-card" data-docs-nav="${escapeHtml(p.id)}">
+      <span class="docs-card-title">${escapeHtml(p.title)}</span>
+      <span class="docs-card-file">${escapeHtml(p.file)}</span>
+      <span class="docs-card-blurb">${escapeHtml(p.blurb)}</span>
+    </button>
+  `).join('');
+  return `
+    ${docsNavBar('index')}
+    <h1>Docs</h1>
+    <p>Same files as in the repo <code>docs/</code> folder. README is under the README tab.</p>
+    <div class="docs-grid">${cards}</div>
+  `;
+}
+
+function docsPageHtml(pageId) {
+  const page = typeof DOC_PAGES !== 'undefined' ? DOC_PAGES[pageId] : null;
+  if (!page) {
+    return `${docsNavBar('index')}<h1>Missing page</h1><p>Unknown doc id <code>${escapeHtml(pageId)}</code>.</p>`;
+  }
+  return `${docsNavBar(pageId)}<div class="docs-article">${renderMarkdown(page.markdown)}</div>`;
+}
+
+function bindDocsNav(root) {
+  root.querySelectorAll('[data-docs-nav]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      openReadmeView(el.getAttribute('data-docs-nav') || 'readme');
+    });
+  });
+}
+
+function openReadmeView(view = 'readme') {
+  const next = (typeof view === 'string' && view) ? view : 'readme';
+  docsView = next;
   activeViewMode = 'readme';
-  document.getElementById('readmeContent').innerHTML = README_HTML;
-  document.getElementById('windowTitleText').textContent = 'How ytea works';
-  document.getElementById('breadcrumb').textContent = 'ytea › How it works';
+  const root = document.getElementById('readmeContent');
+  let title = 'README';
+  let crumb = 'ytea › README';
+
+  if (docsView === 'index') {
+    root.innerHTML = docsIndexHtml();
+    title = 'Docs';
+    crumb = 'ytea › README › Docs';
+  } else {
+    const pageId = (typeof DOC_PAGES !== 'undefined' && DOC_PAGES[docsView]) ? docsView : 'readme';
+    docsView = pageId;
+    root.innerHTML = docsPageHtml(pageId);
+    const page = (typeof DOC_PAGES !== 'undefined') ? DOC_PAGES[pageId] : null;
+    title = page ? page.title : 'README';
+    crumb = pageId === 'readme' ? 'ytea › README' : `ytea › README › Docs › ${title}`;
+  }
+
+  bindDocsNav(root);
+  root.scrollTop = 0;
+  document.getElementById('windowTitleText').textContent = title;
+  document.getElementById('breadcrumb').textContent = crumb;
   switchEditorStage('view-readme');
   renderWorkspaceUI();
 }
@@ -1059,7 +1436,7 @@ codeEditor.addEventListener('keydown', (e) => {
     const trimmed = line.trim();
     const mode = detectFileHeader(codeEditor.value);
     if ((mode === 'UI' && trimmed && !trimmed.startsWith('.') && !trimmed.startsWith('//') && !trimmed.startsWith('#UI//')) ||
-        (mode === 'Y' && /^(on\s+|func\s+|if\s+|else|repeat\s+|for\s+|while\s+)/.test(trimmed))) {
+        (mode === 'Y' && /^(on\s+|once\s+|when\s+|func\s+|if\s+|unless\s+|else|repeat\s+|for\s+|each\s+|while\s+|until\s+|try|catch\s+|wait\s+|every\s+)/.test(trimmed))) {
       indent += '  ';
     }
     codeEditor.value = before + '\n' + indent + codeEditor.value.substring(codeEditor.selectionEnd);
@@ -1099,7 +1476,7 @@ document.getElementById('btnNewFile').addEventListener('click', createNewFile);
 document.getElementById('btnNewFileTab').addEventListener('click', createNewFile);
 document.getElementById('menuNewFile').addEventListener('click', createNewFile);
 document.getElementById('actNewFile').addEventListener('click', createNewFile);
-document.getElementById('actReadme').addEventListener('click', openReadmeView);
+document.getElementById('actReadme').addEventListener('click', () => openReadmeView('readme'));
 
 document.getElementById('btnRenameFile').addEventListener('click', () => {
   const file = getActiveFile();
@@ -1127,8 +1504,8 @@ document.getElementById('btnDeleteFile').addEventListener('click', () => {
 document.getElementById('btnNewProject').addEventListener('click', () => {
   const name = prompt('Project name:', `project-${projects.length + 1}`);
   if (!name || !name.trim()) return;
-  const f1 = { id: generateId('file'), name: 'main.ytea', content: `#UI//\ndiv(id="root")\n  .padding(32px)\n  .background(#0c100e)\n  .color(#f3faf5)\n  h1 "${name.trim()}"\n` };
-  const f2 = { id: generateId('file'), name: 'logic.ytea', content: `#Y//\nconsole.log("${name.trim()} ready")\n` };
+  const f1 = { id: generateId('file'), name: 'main.ytea', content: `#UI//\ndiv(id="root")\n  .min-height(100vh)\n  .display(flex)\n  .flex-direction(column)\n  .align-items(center)\n  .justify-content(center)\n  .padding(32px)\n  .background(#0c100e)\n  .color(#f3faf5)\n  h1 "${name.trim()}"\n` };
+  const f2 = { id: generateId('file'), name: 'logic.ytea', content: `#Y//\non load\n  log "${name.trim()} ready"\n` };
   const np = { id: generateId('ws'), name: name.trim(), files: [f1, f2], activeFileId: f1.id };
   projects.push(np);
   activeProjectId = np.id;
