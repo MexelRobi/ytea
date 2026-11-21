@@ -231,9 +231,25 @@ const JS_MDN_SUGGESTIONS = [
   { label: '.addEventListener()', insert: '.addEventListener("", (event) => {\n  \n})', kind: 'js', detail: 'MDN: listen for an event' }
 ];
 
+const ZENOPACK_VERSION = '1.0';
+const ZENOPACK_MIME_MAP = {
+  html: 'text/html', htm: 'text/html',
+  js: 'application/javascript', mjs: 'application/javascript', cjs: 'application/javascript',
+  css: 'text/css', json: 'application/json',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+  webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp', ico: 'image/x-icon',
+  mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav',
+  mp4: 'video/mp4', webm: 'video/webm',
+  woff: 'font/woff', woff2: 'font/woff2', ttf: 'font/ttf',
+  eot: 'application/vnd.ms-fontobject',
+  txt: 'text/plain', xml: 'application/xml', wasm: 'application/wasm',
+};
+const ZENOPACK_HTML_PLACEHOLDER = '__ZENOPACK_BASE64__';
+
 let projects = [];
 let activeProjectId = null;
 let activeViewMode = 'code';
+let selectedAssetId = null;
 let lastCompiledDocument = '';
 let previewWindowRef = null;
 let acItems = [];
@@ -252,14 +268,18 @@ const codeEditor = document.getElementById('codeEditor');
 const codeHighlight = document.getElementById('codeHighlight');
 const codeLineNumbers = document.getElementById('codeLineNumbers');
 const activeLineHighlight = document.getElementById('activeLineHighlight');
-const outLineNumbers = document.getElementById('outLineNumbers');
-const compiledCode = document.getElementById('compiledCode');
+const assetPreview = document.getElementById('assetPreview');
 const autocompleteMenu = document.getElementById('autocompleteMenu');
 const statusMode = document.getElementById('statusMode');
 const statusCompile = document.getElementById('statusCompile');
 const statusSave = document.getElementById('statusSave');
 const statusCursor = document.getElementById('statusCursor');
 const statusCatalog = document.getElementById('statusCatalog');
+const assetFileInput = document.getElementById('assetFileInput');
+const assetFolderInput = document.getElementById('assetFolderInput');
+const projectZipInput = document.getElementById('projectZipInput');
+
+const TAB_CLOSE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
 
 function generateId(prefix) {
   return prefix + '_' + Math.random().toString(36).substring(2, 9);
@@ -384,6 +404,220 @@ async function loadOfficialCatalogs() {
   }
 }
 
+function ensureProjectShape(proj) {
+  if (!proj || typeof proj !== 'object') return proj;
+  if (!Array.isArray(proj.files)) proj.files = [];
+  if (!Array.isArray(proj.assets)) proj.assets = [];
+  if (!Array.isArray(proj.openTabs)) {
+    proj.openTabs = proj.files.map(f => ({ type: 'file', id: f.id }));
+  } else {
+    proj.openTabs = proj.openTabs.filter(tab => {
+      if (!tab || !tab.type || !tab.id) return false;
+      if (tab.type === 'file') return proj.files.some(f => f.id === tab.id);
+      if (tab.type === 'asset') return proj.assets.some(a => a.id === tab.id);
+      if (tab.type === 'docs') return true;
+      return false;
+    });
+  }
+  return proj;
+}
+
+function ensureOpenTab(type, id) {
+  const proj = getActiveProject();
+  if (!proj) return;
+  if (type === 'docs') {
+    const existing = proj.openTabs.find(t => t.type === 'docs');
+    if (existing) {
+      if (existing.id !== id) {
+        existing.id = id;
+        saveProjects();
+      }
+      return;
+    }
+  }
+  if (!proj.openTabs.some(t => t.type === type && t.id === id)) {
+    proj.openTabs.push({ type, id });
+    saveProjects();
+  }
+}
+
+function removeOpenTab(type, id) {
+  const proj = getActiveProject();
+  if (!proj) return;
+  proj.openTabs = proj.openTabs.filter(t => !(t.type === type && t.id === id));
+}
+
+function downloadBlob(blob, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function downloadProjectZip() {
+  if (typeof JSZip === 'undefined') {
+    showToast('ZIP library missing');
+    return;
+  }
+  const proj = getActiveProject();
+  if (!proj) return;
+
+  const zip = new JSZip();
+  zip.file('ytea.json', JSON.stringify({
+    version: 1,
+    name: proj.name,
+    activeFile: (proj.files.find(f => f.id === proj.activeFileId) || {}).name || null
+  }, null, 2));
+
+  for (const file of proj.files) {
+    zip.file(file.name, file.content || '');
+  }
+  for (const asset of proj.assets) {
+    const path = normalizeAssetPath(asset.path);
+    if (!path || path.toLowerCase() === 'ytea.json') continue;
+    zip.file(path, base64ToBytes(asset.dataBase64));
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  downloadBlob(blob, `${safeDownloadName(proj.name, 'ytea-project')}.zip`);
+  showToast('Project ZIP downloaded');
+}
+
+async function uploadProjectZip(file) {
+  if (!file) return;
+  if (typeof JSZip === 'undefined') {
+    showToast('ZIP library missing');
+    return;
+  }
+
+  const zip = await JSZip.loadAsync(file);
+  let meta = { name: file.name.replace(/\.zip$/i, '') || 'imported-project' };
+  const metaFile = zip.file('ytea.json');
+  if (metaFile) {
+    try {
+      const parsed = JSON.parse(await metaFile.async('string'));
+      if (parsed && typeof parsed === 'object') meta = { ...meta, ...parsed };
+    } catch (_) { /* ignore bad meta */ }
+  }
+
+  const files = [];
+  const assets = [];
+  const entries = Object.keys(zip.files).filter(p => !zip.files[p].dir);
+
+  for (const entryPath of entries) {
+    const path = normalizeAssetPath(entryPath);
+    if (!path || path === 'ytea.json' || path.startsWith('__MACOSX/') || path.endsWith('.DS_Store')) continue;
+    const entry = zip.file(entryPath);
+    if (!entry) continue;
+
+    if (/\.ytea$/i.test(path) && !path.includes('/')) {
+      const content = await entry.async('string');
+      files.push({
+        id: generateId('file'),
+        name: path,
+        content
+      });
+    } else if (/\.ytea$/i.test(path)) {
+      // Nested .ytea files are treated as source files using the basename
+      const content = await entry.async('string');
+      const name = path.split('/').pop();
+      if (!files.some(f => f.name === name)) {
+        files.push({ id: generateId('file'), name, content });
+      }
+    } else {
+      const bytes = new Uint8Array(await entry.async('uint8array'));
+      assets.push({
+        id: generateId('asset'),
+        path,
+        mimeType: getZenopackMime(path),
+        dataBase64: bytesToBase64(bytes),
+        size: bytes.length
+      });
+    }
+  }
+
+  if (!files.length) {
+    showToast('ZIP has no .ytea files');
+    return;
+  }
+
+  const activeName = meta.activeFile;
+  const active = files.find(f => f.name === activeName) || files[0];
+  const np = {
+    id: generateId('ws'),
+    name: String(meta.name || 'imported-project').trim() || 'imported-project',
+    files,
+    assets,
+    openTabs: files.map(f => ({ type: 'file', id: f.id })),
+    activeFileId: active.id
+  };
+  projects.push(np);
+  activeProjectId = np.id;
+  selectedAssetId = null;
+  saveProjects();
+  openCodeFile(active.id, { addTab: false });
+  compileProject(false);
+  showToast(`Imported “${np.name}” (${files.length} files, ${assets.length} assets)`);
+}
+
+function closeOpenTab(type, id) {
+  const proj = getActiveProject();
+  if (!proj) return;
+  const idx = proj.openTabs.findIndex(t => t.type === type && t.id === id);
+  if (idx < 0) return;
+
+  const wasActive =
+    (type === 'file' && activeViewMode === 'code' && proj.activeFileId === id) ||
+    (type === 'asset' && activeViewMode === 'asset' && selectedAssetId === id) ||
+    (type === 'docs' && activeViewMode === 'readme');
+
+  proj.openTabs.splice(idx, 1);
+  saveProjects();
+
+  if (!wasActive) {
+    renderWorkspaceUI();
+    return;
+  }
+
+  const next = proj.openTabs[idx] || proj.openTabs[idx - 1] || proj.openTabs[0] || null;
+  if (!next) {
+    if (proj.files[0]) openCodeFile(proj.files[0].id, { addTab: true });
+    else renderWorkspaceUI();
+    return;
+  }
+  if (next.type === 'file') openCodeFile(next.id, { addTab: false });
+  else if (next.type === 'asset') openAssetView(next.id, { addTab: false });
+  else openReadmeView(next.id === 'index' ? 'index' : 'readme', { addTab: false });
+}
+
+function getExplorerEntries(proj) {
+  const entries = [];
+  for (const file of proj.files) {
+    entries.push({
+      kind: 'file',
+      id: file.id,
+      path: file.name,
+      label: file.name,
+      depth: 0,
+      mode: detectFileHeader(file.content)
+    });
+  }
+  for (const asset of proj.assets) {
+    const path = normalizeAssetPath(asset.path);
+    entries.push({
+      kind: 'asset',
+      id: asset.id,
+      path,
+      label: path,
+      depth: Math.max(0, path.split('/').length - 1),
+      mode: 'A'
+    });
+  }
+  entries.sort((a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: 'base' }));
+  return entries;
+}
+
 function loadProjects() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw) {
@@ -392,27 +626,142 @@ function loadProjects() {
   if (!Array.isArray(projects) || projects.length === 0) {
     const f1 = { id: generateId('file'), name: 'main.ytea', content: DEFAULT_UI_FILE };
     const f2 = { id: generateId('file'), name: 'logic.ytea', content: DEFAULT_Y_FILE };
-    projects = [{ id: generateId('ws'), name: 'my-first-site', files: [f1, f2], activeFileId: f1.id }];
+    projects = [{
+      id: generateId('ws'),
+      name: 'my-first-site',
+      files: [f1, f2],
+      assets: [],
+      openTabs: [{ type: 'file', id: f1.id }, { type: 'file', id: f2.id }],
+      activeFileId: f1.id
+    }];
     saveProjects();
+  } else {
+    projects.forEach(ensureProjectShape);
   }
   const savedWs = localStorage.getItem(ACTIVE_PROJECT_KEY);
   activeProjectId = projects.some(p => p.id === savedWs) ? savedWs : projects[0].id;
 }
 
 function saveProjects() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-  localStorage.setItem(ACTIVE_PROJECT_KEY, activeProjectId);
-  if (statusSave) statusSave.textContent = 'Saved';
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+    localStorage.setItem(ACTIVE_PROJECT_KEY, activeProjectId);
+    if (statusSave) statusSave.textContent = 'Saved';
+  } catch (err) {
+    console.error(err);
+    if (statusSave) statusSave.textContent = 'Save failed';
+    showToast('Could not save — assets may be too large for browser storage');
+  }
 }
 
 function getActiveProject() {
-  return projects.find(p => p.id === activeProjectId) || projects[0];
+  return ensureProjectShape(projects.find(p => p.id === activeProjectId) || projects[0]);
 }
 
 function getActiveFile() {
   const proj = getActiveProject();
   if (!proj || !Array.isArray(proj.files)) return null;
   return proj.files.find(f => f.id === proj.activeFileId) || proj.files[0];
+}
+
+function getSelectedAsset() {
+  const proj = getActiveProject();
+  if (!proj || !selectedAssetId) return null;
+  return proj.assets.find(a => a.id === selectedAssetId) || null;
+}
+
+function getZenopackMime(filename) {
+  const ext = String(filename || '').split('.').pop().toLowerCase();
+  return ZENOPACK_MIME_MAP[ext] || 'application/octet-stream';
+}
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(b64) {
+  const binary = atob(b64 || '');
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function textToByteArray(text) {
+  return Array.from(new TextEncoder().encode(String(text || '')));
+}
+
+function base64ToByteArray(b64) {
+  return Array.from(base64ToBytes(b64));
+}
+
+function formatBytes(n) {
+  if (!n || n < 1024) return `${n || 0} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function normalizeAssetPath(path) {
+  return String(path || '')
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '')
+    .replace(/^\.\//, '');
+}
+
+async function readFileAsAsset(file, relativePath) {
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  const path = normalizeAssetPath(relativePath || file.name);
+  return {
+    id: generateId('asset'),
+    path,
+    mimeType: file.type || getZenopackMime(path),
+    dataBase64: bytesToBase64(bytes),
+    size: bytes.length
+  };
+}
+
+function upsertAssets(newAssets) {
+  const proj = getActiveProject();
+  if (!proj || !newAssets.length) return 0;
+  let added = 0;
+  for (const asset of newAssets) {
+    const existing = proj.assets.findIndex(a => a.path === asset.path);
+    if (existing >= 0) proj.assets[existing] = asset;
+    else {
+      proj.assets.push(asset);
+      added++;
+    }
+  }
+  proj.assets.sort((a, b) => a.path.localeCompare(b.path));
+  saveProjects();
+  return added;
+}
+
+async function importAssetFileList(fileList, fromFolder) {
+  const files = Array.from(fileList || []).filter(f => f && f.name && !f.name.startsWith('.'));
+  if (!files.length) {
+    showToast('No files selected');
+    return;
+  }
+  const assets = [];
+  for (const file of files) {
+    let path = file.name;
+    if (fromFolder && file.webkitRelativePath) {
+      // Keep the selected folder name + nested paths exactly as chosen
+      path = file.webkitRelativePath;
+    }
+    path = normalizeAssetPath(path);
+    if (!path || path.split('/').includes('..')) continue;
+    assets.push(await readFileAsAsset(file, path));
+  }
+  const added = upsertAssets(assets);
+  renderWorkspaceUI();
+  showToast(added ? `Added ${assets.length} asset${assets.length === 1 ? '' : 's'}` : `Updated ${assets.length} asset${assets.length === 1 ? '' : 's'}`);
 }
 
 function detectFileHeader(content) {
@@ -1039,11 +1388,85 @@ ${jsParts.join('\n\n')}
 </body>
 </html>`;
 
-  compiledCode.textContent = lastCompiledDocument;
-  outLineNumbers.innerHTML = Array.from({ length: lastCompiledDocument.split('\n').length }, (_, i) => i + 1).join('<br>');
   statusCompile.textContent = 'Compiled';
   statusCompile.className = 'status-item ok';
   if (notify) showToast('Compiled — real HTML ready');
+}
+
+function buildZenopackObject(proj, compiledHtml) {
+  const files = [{
+    path: 'index.html',
+    mimeType: 'text/html',
+    data: textToByteArray(compiledHtml)
+  }];
+
+  for (const asset of (proj.assets || [])) {
+    const path = normalizeAssetPath(asset.path);
+    if (!path || path.toLowerCase() === 'index.html') continue;
+    files.push({
+      path,
+      mimeType: asset.mimeType || getZenopackMime(path),
+      data: base64ToByteArray(asset.dataBase64)
+    });
+  }
+
+  return {
+    zenopack: ZENOPACK_VERSION,
+    name: proj.name,
+    icon: null,
+    category: null,
+    description: null,
+    fileCount: files.length,
+    exportedAt: new Date().toISOString(),
+    files
+  };
+}
+
+function buildZenopackStandaloneHtml(pack) {
+  const packJson = JSON.stringify(pack);
+  const encoded = bytesToBase64(new TextEncoder().encode(packJson));
+  const html = ZENOPACK_HTML_TEMPLATE.replace(ZENOPACK_HTML_PLACEHOLDER, encoded);
+  if (html.includes(ZENOPACK_HTML_PLACEHOLDER)) {
+    throw new Error('Base64 insertion failed');
+  }
+  return html;
+}
+
+const ZENOPACK_HTML_TEMPLATE = "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<title>ZenoPack Game</title>\n<style>\nhtml,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}\n#game-frame{display:block;width:100%;height:100%;border:0}\n#loading{position:fixed;inset:0;display:grid;place-items:center;background:#111;color:#eee;font:14px system-ui;z-index:10}\n#loading span{opacity:.8}\n</style>\n</head>\n<body>\n<div id=\"loading\"><span>Loading ZenoPack...</span></div>\n<iframe id=\"game-frame\" allow=\"fullscreen; autoplay; gamepad\" allowfullscreen></iframe>\n\n<script>\n\"use strict\";\n\nconst GAME_BASE64 = \"__ZENOPACK_BASE64__\";\n\n(async function () {\n    const loading = document.getElementById(\"loading\");\n\n    const showError = message => {\n        loading.style.display = \"grid\";\n        loading.innerHTML = \"<span></span>\";\n        loading.querySelector(\"span\").textContent = \"Game loading failed: \" + message;\n    };\n\n    const fileURLs = new Map();\n\n    try {\n        const binary = atob(GAME_BASE64);\n        const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));\n        const pack = JSON.parse(new TextDecoder().decode(bytes));\n\n        if (!pack || !pack.zenopack || !pack.name || !Array.isArray(pack.files)) {\n            throw new Error(\"Invalid ZenoPack structure\");\n        }\n\n        for (const file of pack.files) {\n            if (!file || typeof file.path !== \"string\" || !Array.isArray(file.data)) {\n                throw new Error(\"Invalid file entry in ZenoPack\");\n            }\n\n            const path = file.path.replace(/\\\\/g, \"/\").replace(/^\\/+/, \"\");\n            const segments = path.split(\"/\");\n\n            if (!path || segments.includes(\"..\") || fileURLs.has(path)) {\n                throw new Error(\"Unsafe or duplicate path: \" + path);\n            }\n\n            const blob = new Blob(\n                [new Uint8Array(file.data)],\n                { type: file.mimeType || \"application/octet-stream\" }\n            );\n\n            fileURLs.set(path, URL.createObjectURL(blob));\n        }\n\n        const indexEntry = pack.files.find(\n            f => f.path.toLowerCase() === \"index.html\"\n        );\n\n        if (!indexEntry) {\n            throw new Error(\"Missing index.html\");\n        }\n\n        function normalizePath(input) {\n            let value = String(input);\n\n            if (/^(blob:|data:|https?:|javascript:|mailto:|tel:|#|\\/\\/)/i.test(value)) {\n                return null;\n            }\n\n            value = value.split(\"#\", 1)[0].split(\"?\", 1)[0];\n\n            try {\n                value = decodeURIComponent(value);\n            } catch (_) {}\n\n            value = value.replace(/\\\\/g, \"/\");\n\n            if (/^[a-z][a-z0-9+.-]*:\\/\\//i.test(value)) {\n                try {\n                    value = new URL(value).pathname;\n                } catch (_) {\n                    return null;\n                }\n            }\n\n            const parts = [];\n\n            for (const part of value.split(\"/\")) {\n                if (!part || part === \".\") continue;\n\n                if (part === \"..\") {\n                    if (!parts.length) return null;\n                    parts.pop();\n                } else {\n                    parts.push(part);\n                }\n            }\n\n            let key = parts.join(\"/\");\n\n            if (key === \"archive_files.json\") {\n                key = \"archive/archive_files.json\";\n            }\n\n            return key;\n        }\n\n        function findFileURL(input) {\n            const key = normalizePath(input);\n\n            if (!key) return null;\n            if (fileURLs.has(key)) return fileURLs.get(key);\n\n            const archivePos = key.lastIndexOf(\"archive/\");\n\n            if (archivePos >= 0) {\n                const archiveKey = key.slice(archivePos);\n\n                if (fileURLs.has(archiveKey)) {\n                    return fileURLs.get(archiveKey);\n                }\n            }\n\n            const basename = key.split(\"/\").pop();\n\n            if (fileURLs.has(basename)) {\n                return fileURLs.get(basename);\n            }\n\n            return null;\n        }\n\n        const virtualFiles = Object.fromEntries(fileURLs);\n\n        const bootstrap = `<script>\n        (() => {\n            const files = ${JSON.stringify(virtualFiles)};\n\n            function resolveAsset(input) {\n                let value = String(input);\n\n                if (/^(blob:|data:|https?:|javascript:|mailto:|tel:|#|\\\\/\\\\/)/i.test(value)) {\n                    return null;\n                }\n\n                value = value.split(\"#\", 1)[0].split(\"?\", 1)[0];\n\n                try {\n                    value = decodeURIComponent(value);\n                } catch (_) {}\n\n                value = value.replace(/\\\\\\\\/g, \"/\");\n\n                if (/^[a-z][a-z0-9+.-]*:\\\\/\\\\//i.test(value)) {\n                    try {\n                        value = new URL(value).pathname;\n                    } catch (_) {\n                        return null;\n                    }\n                }\n\n                const parts = [];\n\n                for (const part of value.split(\"/\")) {\n                    if (!part || part === \".\") continue;\n\n                    if (part === \"..\") {\n                        if (!parts.length) return null;\n                        parts.pop();\n                    } else {\n                        parts.push(part);\n                    }\n                }\n\n                let key = parts.join(\"/\");\n\n                if (key === \"archive_files.json\") {\n                    key = \"archive/archive_files.json\";\n                }\n\n                if (files[key]) return files[key];\n\n                const archivePos = key.lastIndexOf(\"archive/\");\n\n                if (archivePos >= 0 && files[key.slice(archivePos)]) {\n                    return files[key.slice(archivePos)];\n                }\n\n                const basename = key.split(\"/\").pop();\n\n                return files[basename] || null;\n            }\n\n            const originalOpen = XMLHttpRequest.prototype.open;\n\n            XMLHttpRequest.prototype.open = function(method, url, ...rest) {\n                const local = resolveAsset(url);\n                return originalOpen.call(this, method, local || url, ...rest);\n            };\n\n            if (window.fetch) {\n                const originalFetch = window.fetch.bind(window);\n\n                window.fetch = function(input, init) {\n                    const raw = input instanceof Request ? input.url : input;\n                    const local = resolveAsset(raw);\n\n                    return local\n                        ? originalFetch(local, init)\n                        : originalFetch(input, init);\n                };\n            }\n\n            const originalSetAttribute = Element.prototype.setAttribute;\n\n            Element.prototype.setAttribute = function(name, value) {\n                if (/^(src|href|poster)$/i.test(name)) {\n                    const local = resolveAsset(value);\n                    if (local) value = local;\n                }\n\n                return originalSetAttribute.call(this, name, value);\n            };\n\n            const scriptSrcDescriptor =\n                Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, \"src\");\n\n            if (\n                scriptSrcDescriptor &&\n                scriptSrcDescriptor.get &&\n                scriptSrcDescriptor.set\n            ) {\n                Object.defineProperty(HTMLScriptElement.prototype, \"src\", {\n                    configurable: scriptSrcDescriptor.configurable,\n                    enumerable: scriptSrcDescriptor.enumerable,\n\n                    get: function() {\n                        return scriptSrcDescriptor.get.call(this);\n                    },\n\n                    set: function(value) {\n                        const local = resolveAsset(value);\n                        scriptSrcDescriptor.set.call(this, local || value);\n                    }\n                });\n            }\n        })();\n        <\\/script>`;\n\n        let gameHTML = new TextDecoder().decode(\n            new Uint8Array(indexEntry.data)\n        );\n\n        gameHTML = gameHTML.replace(\n            /\\b(src|href|poster|data)\\s*=\\s*([\"'])(.*?)\\2/gi,\n            (match, attr, quote, value) => {\n                const local = findFileURL(value);\n                return local ? `${attr}=${quote}${local}${quote}` : match;\n            }\n        );\n\n        gameHTML = gameHTML.replace(\n            /url\\(\\s*([\"']?)(?!data:|https?:|blob:|\\/\\/|#)([^)'\"]+)\\1\\s*\\)/gi,\n            (match, quote, path) => {\n                const local = findFileURL(path.trim());\n                return local ? `url(\"${local}\")` : match;\n            }\n        );\n\n        gameHTML = gameHTML.replace(/,\\s*minimal-ui|minimal-ui\\s*,?/gi, \"\");\n\n        if (/<head\\b[^>]*>/i.test(gameHTML)) {\n            gameHTML = gameHTML.replace(\n                /<head\\b[^>]*>/i,\n                head => head + bootstrap\n            );\n        } else {\n            gameHTML = bootstrap + gameHTML;\n        }\n\n        document.getElementById(\"game-frame\").srcdoc = gameHTML;\n        loading.style.display = \"none\";\n\n        console.info(\n            \"ZenoPack loaded:\",\n            pack.name,\n            \"| Files:\",\n            pack.files.length\n        );\n\n    } catch (error) {\n        console.error(error);\n        showError(error && error.message ? error.message : String(error));\n    }\n})();\n</script>\n</body>\n</html>\n";
+
+function buildExportDocument() {
+  compileProject(false);
+  const proj = getActiveProject();
+  const pack = buildZenopackObject(proj, lastCompiledDocument);
+  return {
+    proj,
+    pack,
+    html: buildZenopackStandaloneHtml(pack)
+  };
+}
+
+function safeDownloadName(name, fallback) {
+  const cleaned = String(name || '')
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+    .replace(/[^a-z0-9_\-]+/gi, '_')
+    .replace(/^_+|_+$/g, '')
+    .trim();
+  return cleaned || fallback || 'ytea-export';
+}
+
+function createTabCloseButton(type, id) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'tab-close';
+  btn.title = 'Close';
+  btn.setAttribute('aria-label', 'Close tab');
+  btn.innerHTML = TAB_CLOSE_SVG;
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeOpenTab(type, id);
+  });
+  return btn;
 }
 
 function renderWorkspaceUI() {
@@ -1060,42 +1483,82 @@ function renderWorkspaceUI() {
   sidebarProjectName.textContent = proj.name;
 
   fileTreeList.innerHTML = '';
-  proj.files.forEach(file => {
-    const mode = detectFileHeader(file.content);
-    const li = document.createElement('li');
-    li.className = 'file-item' + (activeViewMode === 'code' && file.id === proj.activeFileId ? ' active' : '');
-    li.innerHTML = `<span class="file-tag ${mode === 'Y' ? 'tag-y' : 'tag-ui'}">${mode}</span><span>${escapeHtml(file.name)}</span>`;
-    li.addEventListener('click', () => openCodeFile(file.id));
-    fileTreeList.appendChild(li);
-  });
+  const entries = getExplorerEntries(proj);
+  if (!entries.length) {
+    const empty = document.createElement('li');
+    empty.className = 'file-item asset-empty';
+    empty.innerHTML = `<span class="file-tag tag-asset">·</span><span>No files yet</span>`;
+    fileTreeList.appendChild(empty);
+  } else {
+    entries.forEach(entry => {
+      const li = document.createElement('li');
+      const isActive = entry.kind === 'file'
+        ? (activeViewMode === 'code' && entry.id === proj.activeFileId)
+        : (activeViewMode === 'asset' && selectedAssetId === entry.id);
+      li.className = 'file-item' + (isActive ? ' active' : '');
+      li.style.setProperty('--tree-depth', String(entry.depth));
+      li.title = entry.path;
+      const tagClass = entry.kind === 'asset'
+        ? 'tag-asset'
+        : (entry.mode === 'Y' ? 'tag-y' : 'tag-ui');
+      const tagLabel = entry.kind === 'asset' ? 'A' : entry.mode;
+      const displayName = entry.kind === 'asset'
+        ? entry.path.split('/').pop()
+        : entry.label;
+      li.innerHTML = `<span class="file-tag ${tagClass}">${tagLabel}</span><span class="file-label">${escapeHtml(displayName)}</span>`;
+      if (entry.kind === 'asset' && entry.depth > 0) {
+        li.querySelector('.file-label').insertAdjacentHTML('beforebegin', `<span class="file-path-hint">${escapeHtml(entry.path.split('/').slice(0, -1).join('/'))}/</span>`);
+      }
+      li.addEventListener('click', () => {
+        if (entry.kind === 'file') openCodeFile(entry.id);
+        else openAssetView(entry.id);
+      });
+      fileTreeList.appendChild(li);
+    });
+  }
 
   tabBar.innerHTML = '';
-  proj.files.forEach(file => {
-    const mode = detectFileHeader(file.content);
-    const isActive = activeViewMode === 'code' && file.id === proj.activeFileId;
-    const tab = document.createElement('div');
-    tab.className = 'tab' + (isActive ? ' active' : '');
-    tab.innerHTML = `<span class="file-tag ${mode === 'Y' ? 'tag-y' : 'tag-ui'}">${mode}</span><span>${escapeHtml(file.name)}</span><span class="tab-dot"></span>`;
-    tab.addEventListener('click', () => openCodeFile(file.id));
-    tabBar.appendChild(tab);
+  proj.openTabs.forEach(tab => {
+    const el = document.createElement('div');
+    let label = '';
+    let tagClass = 'tag-asset';
+    let tagLabel = 'A';
+    let isActive = false;
+
+    if (tab.type === 'file') {
+      const file = proj.files.find(f => f.id === tab.id);
+      if (!file) return;
+      const mode = detectFileHeader(file.content);
+      label = file.name;
+      tagClass = mode === 'Y' ? 'tag-y' : 'tag-ui';
+      tagLabel = mode;
+      isActive = activeViewMode === 'code' && proj.activeFileId === file.id;
+      el.addEventListener('click', () => openCodeFile(file.id, { addTab: false }));
+    } else if (tab.type === 'asset') {
+      const asset = proj.assets.find(a => a.id === tab.id);
+      if (!asset) return;
+      label = asset.path;
+      tagClass = 'tag-asset';
+      tagLabel = 'A';
+      isActive = activeViewMode === 'asset' && selectedAssetId === asset.id;
+      el.addEventListener('click', () => openAssetView(asset.id, { addTab: false }));
+    } else if (tab.type === 'docs') {
+      label = (tab.id === 'index' || docsView === 'index')
+        ? 'Docs'
+        : ((typeof DOC_PAGES !== 'undefined' && DOC_PAGES[docsView]) ? DOC_PAGES[docsView].title : 'README');
+      tagClass = 'tag-md';
+      tagLabel = '?';
+      isActive = activeViewMode === 'readme';
+      el.addEventListener('click', () => openReadmeView(tab.id === 'index' ? 'index' : docsView || 'readme', { addTab: false }));
+    } else {
+      return;
+    }
+
+    el.className = 'tab' + (isActive ? ' active' : '');
+    el.innerHTML = `<span class="file-tag ${tagClass}">${tagLabel}</span><span class="tab-label">${escapeHtml(label)}</span>`;
+    el.appendChild(createTabCloseButton(tab.type, tab.id));
+    tabBar.appendChild(el);
   });
-
-  const readmeTab = document.createElement('div');
-  readmeTab.className = 'tab' + (activeViewMode === 'readme' ? ' active' : '');
-  const readmeLabel = docsView === 'index'
-    ? 'Docs'
-    : ((typeof DOC_PAGES !== 'undefined' && DOC_PAGES[docsView]) ? DOC_PAGES[docsView].title : 'README');
-  readmeTab.innerHTML = `<span class="file-tag tag-md">?</span><span>${escapeHtml(readmeLabel)}</span><span class="tab-dot"></span>`;
-  readmeTab.addEventListener('click', () => openReadmeView('readme'));
-  tabBar.appendChild(readmeTab);
-
-  const outTab = document.createElement('div');
-  outTab.className = 'tab' + (activeViewMode === 'output' ? ' active' : '');
-  outTab.innerHTML = `<span class="file-tag tag-html">&lt;&gt;</span><span>dist/index.html</span><span class="tab-dot"></span>`;
-  outTab.addEventListener('click', openOutputView);
-  tabBar.appendChild(outTab);
-
-  document.getElementById('navCompiledOutput').classList.toggle('active', activeViewMode === 'output');
 }
 
 function renderInlineMd(text) {
@@ -1265,10 +1728,14 @@ function bindDocsNav(root) {
   });
 }
 
-function openReadmeView(view = 'readme') {
+function openReadmeView(view = 'readme', options = {}) {
   const next = (typeof view === 'string' && view) ? view : 'readme';
   docsView = next;
+  selectedAssetId = null;
   activeViewMode = 'readme';
+  if (options.addTab !== false) {
+    ensureOpenTab('docs', next === 'index' ? 'index' : 'readme');
+  }
   const root = document.getElementById('readmeContent');
   let title = 'README';
   let crumb = 'ytea › README';
@@ -1294,31 +1761,48 @@ function openReadmeView(view = 'readme') {
   renderWorkspaceUI();
 }
 
-function openCodeFile(fileId) {
+function openCodeFile(fileId, options = {}) {
   const proj = getActiveProject();
   if (!proj) return;
-  proj.activeFileId = fileId;
+  const file = proj.files.find(f => f.id === fileId) || proj.files[0];
+  if (!file) return;
+  proj.activeFileId = file.id;
+  selectedAssetId = null;
   activeViewMode = 'code';
+  if (options.addTab !== false) ensureOpenTab('file', file.id);
   saveProjects();
-  const file = getActiveFile();
-  if (file) {
-    codeEditor.value = file.content;
-    updateEditorVisuals();
-    updateCursorAndLineHighlight();
-    document.getElementById('windowTitleText').textContent = `${file.name} — ${proj.name}`;
-    document.getElementById('breadcrumb').textContent = `${proj.name} › ${file.name}`;
-  }
+  codeEditor.value = file.content;
+  updateEditorVisuals();
+  updateCursorAndLineHighlight();
+  document.getElementById('windowTitleText').textContent = `${file.name} — ${proj.name}`;
+  document.getElementById('breadcrumb').textContent = `${proj.name} › ${file.name}`;
   switchEditorStage('view-code');
   renderWorkspaceUI();
 }
 
-function openOutputView() {
-  activeViewMode = 'output';
-  compileProject(false);
+function openAssetView(assetId, options = {}) {
   const proj = getActiveProject();
-  document.getElementById('windowTitleText').textContent = `dist/index.html — ${proj.name}`;
-  document.getElementById('breadcrumb').textContent = `${proj.name} › dist › index.html`;
-  switchEditorStage('view-output');
+  const asset = (proj.assets || []).find(a => a.id === assetId);
+  if (!asset) return;
+  selectedAssetId = asset.id;
+  activeViewMode = 'asset';
+  if (options.addTab !== false) ensureOpenTab('asset', asset.id);
+  document.getElementById('windowTitleText').textContent = `${asset.path} — ${proj.name}`;
+  document.getElementById('breadcrumb').textContent = `${proj.name} › ${asset.path}`;
+  if (assetPreview) {
+    const isImage = (asset.mimeType || '').startsWith('image/');
+    const sizeLabel = formatBytes(asset.size || Math.floor(((asset.dataBase64 || '').length * 3) / 4));
+    assetPreview.innerHTML = `
+      <div class="asset-preview-meta">
+        <div class="asset-preview-path">${escapeHtml(asset.path)}</div>
+        <div class="asset-preview-details">${escapeHtml(asset.mimeType || 'application/octet-stream')} · ${escapeHtml(sizeLabel)}</div>
+      </div>
+      ${isImage
+        ? `<img class="asset-preview-image" alt="${escapeHtml(asset.path)}" src="data:${escapeHtml(asset.mimeType)};base64,${asset.dataBase64}" />`
+        : `<div class="asset-preview-empty">Binary asset — included as-is in ZenoPack export</div>`}
+    `;
+  }
+  switchEditorStage('view-asset');
   renderWorkspaceUI();
 }
 
@@ -1359,11 +1843,19 @@ function updateCursorAndLineHighlight() {
 }
 
 function openPreviewPopup() {
-  compileProject(false);
   const btn = document.getElementById('btnPreview');
   btn.classList.remove('flash');
   void btn.offsetWidth;
   btn.classList.add('flash');
+
+  let html;
+  try {
+    html = buildExportDocument().html;
+  } catch (err) {
+    console.error(err);
+    showToast('Preview failed: ' + (err && err.message ? err.message : err));
+    return;
+  }
 
   if (!previewWindowRef || previewWindowRef.closed) {
     previewWindowRef = window.open('', 'YteaPreviewWindow', 'width=1040,height=720,resizable=yes,scrollbars=yes');
@@ -1372,7 +1864,7 @@ function openPreviewPopup() {
   }
   if (previewWindowRef) {
     previewWindowRef.document.open();
-    previewWindowRef.document.write(lastCompiledDocument);
+    previewWindowRef.document.write(html);
     previewWindowRef.document.close();
   } else {
     showToast('Popup blocked — please allow popups');
@@ -1475,13 +1967,132 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-function createNewFile() {
+/**
+ * Shows a styled prompt modal and returns a promise with the user input.
+ * Replaces browser prompt() with a nice overlay matching the ytea design.
+ * @param {string} message - The prompt message to display.
+ * @param {string} defaultValue - The default text in the input field.
+ * @returns {Promise<string | null>} - Resolves with the trimmed input value,
+ *   or null if the user clicks Cancel or presses Escape.
+ */
+function showStyledPrompt(message, defaultValue = '') {
+  return new Promise((resolve) => {
+    // Remove any existing modal
+    const existing = document.querySelector('.prompt-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'prompt-overlay';
+    overlay.innerHTML = `
+      <div class="prompt-modal">
+        <div style="margin-bottom: 16px; color: var(--text-main); font-size: 14px;;">${message}</div>
+        <input type="text" autocomplete="off" style="width:100%;padding:8px 12px;margin-bottom:16px;border:1px solid var(--border);border-radius:8px;background:var(--bg-panel);color:var(--text-main);font:inherit;font-size:14px;" />
+        <div class="buttons">
+          <button class="btn ok" style="background:transparent;border:1px solid var(--accent);color:var(--text-main);padding:6px 12px;border-radius:8px;font:inherit;font-size:13px;">OK</button>
+          <button class="btn cancel" style="background:transparent;border:1px solid var(--border);color:var(--text-main);padding:6px 12px;border-radius:8px;font:inherit;font-size:13px;">Cancel</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.classList.add('visible');
+
+    const input = overlay.querySelector('input');
+    const okBtn = overlay.querySelector('.btn.ok');
+    const cancelBtn = overlay.querySelector('.btn.cancel');
+
+    // Set default value after the DOM is ready
+    if (defaultValue) input.value = defaultValue;
+
+    function closeModal() {
+      overlay.classList.remove('visible');
+      setTimeout(() => overlay.remove(), 200);
+    }
+
+    // OK button -> resolve with input value
+    okBtn.addEventListener('click', () => {
+      const value = input.value.trim();
+      closeModal();
+      resolve(value ? value : null);
+    });
+
+    // Cancel button -> resolve null
+    cancelBtn.addEventListener('click', () => {
+      closeModal();
+      resolve(null);
+    });
+
+    // Escape key -> resolve null
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        closeModal();
+        resolve(null);
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown);
+  });
+}
+
+/**
+ * Shows a styled confirmation modal (OK / Cancel) and returns a promise
+ * that resolves to true when the user confirms, false otherwise.
+ * @param {string} message - The confirmation message to display.
+ * @returns {Promise<boolean>}
+ */
+function showStyledConfirm(message) {
+  return new Promise((resolve) => {
+    const existing = document.querySelector('.prompt-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'prompt-overlay';
+    overlay.innerHTML = `
+      <div class="prompt-modal">
+        <div style="margin-bottom: 20px; color: var(--text-main); font-size: 14px;">${message}</div>
+        <div class="buttons">
+          <button class="btn ok" style="background:transparent;border:1px solid var(--accent);color:var(--text-main);padding:6px 12px;border-radius:8px;font:inherit;font-size:13px;">OK</button>
+          <button class="btn cancel" style="background:transparent;border:1px solid var(--border);color:var(--text-main);padding:6px 12px;border-radius:8px;font:inherit;font-size:13px;">Cancel</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.classList.add('visible');
+
+    const okBtn = overlay.querySelector('.btn.ok');
+    const cancelBtn = overlay.querySelector('.btn.cancel');
+
+    function closeModal() {
+      overlay.classList.remove('visible');
+      setTimeout(() => overlay.remove(), 200);
+    }
+
+    okBtn.addEventListener('click', () => {
+      closeModal();
+      resolve(true);
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      closeModal();
+      resolve(false);
+    });
+
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        closeModal();
+        resolve(false);
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown);
+  });
+}
+
+/* istanbul ignore next */
+async function createNewFile() {
   const proj = getActiveProject();
   if (!proj) return;
-  let name = prompt('New file name:', `page-${proj.files.length + 1}.ytea`);
+  let name = await showStyledPrompt('New file name:', `page-${proj.files.length + 1}.ytea`);
   if (!name || !name.trim()) return;
   name = name.trim().endsWith('.ytea') ? name.trim() : name.trim() + '.ytea';
-  const type = prompt('UI (looks) or Y (does)?', 'UI');
+  const type = await showStyledPrompt('UI (looks) or Y (does)?', 'UI');
   const content = (type && type.trim().toUpperCase() === 'Y')
     ? '#Y//\n'
     : '#UI//\ndiv(id="box")\n  .padding(16px)\n  h1 "Hello"\n';
@@ -1498,10 +2109,32 @@ document.getElementById('menuNewFile').addEventListener('click', createNewFile);
 document.getElementById('actNewFile').addEventListener('click', createNewFile);
 document.getElementById('actReadme').addEventListener('click', () => openReadmeView('readme'));
 
-document.getElementById('btnRenameFile').addEventListener('click', () => {
+document.getElementById('btnRenameFile').addEventListener('click', async () => {
+  if (activeViewMode === 'asset') {
+    const asset = getSelectedAsset();
+    if (!asset) return;
+    let n = await showStyledPrompt('Rename asset path:', asset.path);
+    if (!n || !n.trim()) return;
+    const path = normalizeAssetPath(n.trim());
+    if (!path || path.split('/').includes('..')) {
+      showToast('Invalid asset path');
+      return;
+    }
+    const proj = getActiveProject();
+    if (proj.assets.some(a => a.id !== asset.id && a.path === path)) {
+      showToast('An asset with that path already exists');
+      return;
+    }
+    asset.path = path;
+    asset.mimeType = getZenopackMime(path);
+    saveProjects();
+    openAssetView(asset.id);
+    return;
+  }
+
   const file = getActiveFile();
   if (!file || activeViewMode !== 'code') return;
-  let n = prompt('Rename file:', file.name);
+  let n = await showStyledPrompt('Rename file:', file.name);
   if (n && n.trim()) {
     file.name = n.trim().endsWith('.ytea') ? n.trim() : n.trim() + '.ytea';
     saveProjects();
@@ -1509,42 +2142,68 @@ document.getElementById('btnRenameFile').addEventListener('click', () => {
   }
 });
 
-document.getElementById('btnDeleteFile').addEventListener('click', () => {
+document.getElementById('btnDeleteFile').addEventListener('click', async () => {
   const proj = getActiveProject();
+  if (!proj) return;
+
+  if (activeViewMode === 'asset') {
+    const asset = getSelectedAsset();
+    if (!asset) return;
+    if (await showStyledConfirm(`Delete asset ${asset.path}?`)) {
+      removeOpenTab('asset', asset.id);
+      proj.assets = proj.assets.filter(a => a.id !== asset.id);
+      selectedAssetId = null;
+      saveProjects();
+      const nextTab = proj.openTabs[0];
+      if (nextTab && nextTab.type === 'asset') openAssetView(nextTab.id, { addTab: false });
+      else openCodeFile((nextTab && nextTab.type === 'file' ? nextTab.id : null) || proj.activeFileId || proj.files[0].id, { addTab: false });
+    }
+    return;
+  }
+
   const file = getActiveFile();
-  if (!proj || !file || proj.files.length <= 1) return;
-  if (confirm(`Delete ${file.name}?`)) {
+  if (!file || proj.files.length <= 1) return;
+  if (await showStyledConfirm(`Delete ${file.name}?`)) {
+    removeOpenTab('file', file.id);
     proj.files = proj.files.filter(f => f.id !== file.id);
     proj.activeFileId = proj.files[0].id;
     saveProjects();
-    openCodeFile(proj.activeFileId);
+    openCodeFile(proj.activeFileId, { addTab: true });
   }
 });
 
-document.getElementById('btnNewProject').addEventListener('click', () => {
-  const name = prompt('Project name:', `project-${projects.length + 1}`);
+document.getElementById('btnNewProject').addEventListener('click', async () => {
+  const name = await showStyledPrompt('Project name:', `project-${projects.length + 1}`);
   if (!name || !name.trim()) return;
   const f1 = { id: generateId('file'), name: 'main.ytea', content: `#UI//\ndiv(id="root")\n  .min-height(100vh)\n  .display(flex)\n  .flex-direction(column)\n  .align-items(center)\n  .justify-content(center)\n  .padding(32px)\n  .background(#0c100e)\n  .color(#f3faf5)\n  h1 "${name.trim()}"\n` };
   const f2 = { id: generateId('file'), name: 'logic.ytea', content: `#Y//\non load\n  log "${name.trim()} ready"\n` };
-  const np = { id: generateId('ws'), name: name.trim(), files: [f1, f2], activeFileId: f1.id };
+  const np = {
+    id: generateId('ws'),
+    name: name.trim(),
+    files: [f1, f2],
+    assets: [],
+    openTabs: [{ type: 'file', id: f1.id }, { type: 'file', id: f2.id }],
+    activeFileId: f1.id
+  };
   projects.push(np);
   activeProjectId = np.id;
+  selectedAssetId = null;
   saveProjects();
-  openCodeFile(f1.id);
+  openCodeFile(f1.id, { addTab: false });
   compileProject(false);
 });
 
-document.getElementById('btnRenameProject').addEventListener('click', () => {
+document.getElementById('btnRenameProject').addEventListener('click', async () => {
   const proj = getActiveProject();
   if (!proj) return;
-  const n = prompt('Rename project:', proj.name);
+  const n = await showStyledPrompt('Rename project:', proj.name);
   if (n && n.trim()) { proj.name = n.trim(); saveProjects(); openCodeFile(proj.activeFileId); }
 });
 
-document.getElementById('btnDeleteProject').addEventListener('click', () => {
+document.getElementById('btnDeleteProject').addEventListener('click', async () => {
   if (projects.length <= 1) return;
   const proj = getActiveProject();
-  if (proj && confirm(`Delete ${proj.name}?`)) {
+  if (proj && await showStyledConfirm(`Delete ${proj.name}?`)) {
     projects = projects.filter(p => p.id !== proj.id);
     activeProjectId = projects[0].id;
     saveProjects();
@@ -1560,22 +2219,68 @@ projectSelect.addEventListener('change', (e) => {
   compileProject(false);
 });
 
-document.getElementById('navCompiledOutput').addEventListener('click', openOutputView);
-document.getElementById('actCompile').addEventListener('click', openOutputView);
+document.getElementById('actCompile').addEventListener('click', () => compileProject(true));
 document.getElementById('btnCompile').addEventListener('click', () => compileProject(true));
 document.getElementById('menuCompile').addEventListener('click', () => compileProject(true));
 document.getElementById('btnPreview').addEventListener('click', openPreviewPopup);
 document.getElementById('menuPreview').addEventListener('click', openPreviewPopup);
 document.getElementById('actPreview').addEventListener('click', openPreviewPopup);
 
+document.getElementById('btnAddAssetFiles').addEventListener('click', () => assetFileInput && assetFileInput.click());
+document.getElementById('btnAddAssetFolder').addEventListener('click', () => assetFolderInput && assetFolderInput.click());
+document.getElementById('btnDownloadProject').addEventListener('click', () => {
+  downloadProjectZip().catch(err => {
+    console.error(err);
+    showToast('ZIP download failed');
+  });
+});
+document.getElementById('btnUploadProject').addEventListener('click', () => projectZipInput && projectZipInput.click());
+
+if (assetFileInput) {
+  assetFileInput.addEventListener('change', async () => {
+    try {
+      await importAssetFileList(assetFileInput.files, false);
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to add assets');
+    }
+    assetFileInput.value = '';
+  });
+}
+if (assetFolderInput) {
+  assetFolderInput.addEventListener('change', async () => {
+    try {
+      await importAssetFileList(assetFolderInput.files, true);
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to add folder');
+    }
+    assetFolderInput.value = '';
+  });
+}
+if (projectZipInput) {
+  projectZipInput.addEventListener('change', async () => {
+    const file = projectZipInput.files && projectZipInput.files[0];
+    try {
+      await uploadProjectZip(file);
+    } catch (err) {
+      console.error(err);
+      showToast('ZIP import failed');
+    }
+    projectZipInput.value = '';
+  });
+}
+
 document.getElementById('btnExport').addEventListener('click', () => {
-  compileProject(false);
-  const blob = new Blob([lastCompiledDocument], { type: 'text/html;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${getActiveProject().name.toLowerCase().replace(/[^a-z0-9_-]+/g, '-')}.html`;
-  a.click();
-  showToast('Exported HTML file');
+  try {
+    const { proj, pack, html } = buildExportDocument();
+    const name = safeDownloadName(proj.name, 'ytea-export');
+    downloadBlob(new Blob([html], { type: 'text/html;charset=utf-8' }), `${name}.html`);
+    showToast(`Exported ZenoPack HTML (${pack.fileCount} files)`);
+  } catch (err) {
+    console.error(err);
+    showToast('Export failed: ' + (err && err.message ? err.message : err));
+  }
 });
 
 function showToast(msg) {
