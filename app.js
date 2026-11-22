@@ -1232,76 +1232,79 @@ function restructureYToJS(source) {
       continue;
     }
 
-    const saveLocalMatch = text.match(/^save\s+local\s+("[^"]+"|'[^']+')\s+as\s+(.+)$/);
+        const saveLocalMatch = text.match(/^save\s+local\s+("[^"]+"|'[^']+')\s+as\s+(.+)$/);
     if (saveLocalMatch) {
       const m = saveLocalMatch;
-      output.push(`${pad}localStorage.setItem(${m}, JSON.stringify(${expandRefs(m)}));`);
+      output.push(`${pad}localStorage.setItem(${m[1]}, JSON.stringify(${expandRefs(m[2])}));`);
       continue;
     }
 
-    const loadLocalMatch = text.match(/^var\s+([a-zA-Z0-9_$]+)\s*=\s*load\s+local\s+("[^"]+"|'[^']+')$/);
+    const loadLocalMatch = text.match(/^(var\s+)?([a-zA-Z0-9_$]+)\s*=\s*load\s+local\s+("[^"]+"|'[^']+')$/);
     if (loadLocalMatch) {
       const m = loadLocalMatch;
-      output.push(`${pad}let ${m} = JSON.parse(localStorage.getItem(${m}));`);
+      const decl = m[1] ? 'let ' : '';
+      output.push(`${pad}${decl}${m[2]} = JSON.parse(localStorage.getItem(${m[3]}));`);
       continue;
     }
 
     const delLocalMatch = text.match(/^delete\s+local\s+("[^"]+"|'[^']+')$/);
     if (delLocalMatch) {
       const m = delLocalMatch;
-      output.push(`${pad}localStorage.removeItem(${m});`);
+      output.push(`${pad}localStorage.removeItem(${m[1]});`);
       continue;
     }
 
     const saveSessionMatch = text.match(/^save\s+session\s+("[^"]+"|'[^']+')\s+as\s+(.+)$/);
     if (saveSessionMatch) {
       const m = saveSessionMatch;
-      output.push(`${pad}sessionStorage.setItem(${m}, JSON.stringify(${expandRefs(m)}));`);
+      output.push(`${pad}sessionStorage.setItem(${m[1]}, JSON.stringify(${expandRefs(m[2])}));`);
       continue;
     }
 
-    const loadSessionMatch = text.match(/^var\s+([a-zA-Z0-9_$]+)\s*=\s*load\s+session\s+("[^"]+"|'[^']+')$/);
+    const loadSessionMatch = text.match(/^(var\s+)?([a-zA-Z0-9_$]+)\s*=\s*load\s+session\s+("[^"]+"|'[^']+')$/);
     if (loadSessionMatch) {
       const m = loadSessionMatch;
-      output.push(`${pad}let ${m} = JSON.parse(sessionStorage.getItem(${m}));`);
+      const decl = m[1] ? 'let ' : '';
+      output.push(`${pad}${decl}${m[2]} = JSON.parse(sessionStorage.getItem(${m[3]}));`);
       continue;
     }
 
     const delSessionMatch = text.match(/^delete\s+session\s+("[^"]+"|'[^']+')$/);
     if (delSessionMatch) {
       const m = delSessionMatch;
-      output.push(`${pad}sessionStorage.removeItem(${m});`);
+      output.push(`${pad}sessionStorage.removeItem(${m[1]});`);
       continue;
     }
 
     const saveCookieMatch = text.match(/^save\s+cookie\s+("[^"]+"|'[^']+')\s+as\s+(.+)$/);
     if (saveCookieMatch) {
       const m = saveCookieMatch;
-      output.push(`${pad}document.cookie = ${m} + '=' + encodeURIComponent(JSON.stringify(${expandRefs(m)})) + ';path=/;max-age=2592000';`);
+      output.push(`${pad}document.cookie = ${m[1]} + '=' + encodeURIComponent(JSON.stringify(${expandRefs(m[2])})) + ';path=/;max-age=2592000';`);
       continue;
     }
 
-    const loadCookieMatch = text.match(/^var\s+([a-zA-Z0-9_$]+)\s*=\s*load\s+cookie\s+("[^"]+"|'[^']+')$/);
+    const loadCookieMatch = text.match(/^(var\s+)?([a-zA-Z0-9_$]+)\s*=\s*load\s+cookie\s+("[^"]+"|'[^']+')$/);
     if (loadCookieMatch) {
       const m = loadCookieMatch;
-      output.push(`${pad}let ${m} = (() => { const v = document.cookie.split('; ').find(r => r.startsWith(${m} + '=')); return v ? JSON.parse(decodeURIComponent(v.split('=')[1])) : null; })();`);
+      const decl = m[1] ? 'let ' : '';
+      output.push(`${pad}${decl}${m[2]} = (() => { const v = document.cookie.split('; ').find(r => r.startsWith(${m[3]} + '=')); return v ? JSON.parse(decodeURIComponent(v.split('=')[1])) : null; })();`);
       continue;
     }
 
     const delCookieMatch = text.match(/^delete\s+cookie\s+("[^"]+"|'[^']+')$/);
     if (delCookieMatch) {
       const m = delCookieMatch;
-      output.push(`${pad}document.cookie = ${m} + '=;path=/;max-age=0';`);
+      output.push(`${pad}document.cookie = ${m[1]} + '=;path=/;max-age=0';`);
       continue;
     }
 
     const onQuitMatch = text.match(/^on\s+quit$/);
     if (onQuitMatch) {
-      const m = onQuitMatch;
       output.push(`${pad}(() => { let __q = false; const __fn = () => { if (__q) return; __q = true;`);
       blockStack.push({ indent, closer: "}; window.addEventListener('pagehide', __fn); window.addEventListener('beforeunload', __fn); })();" });
       continue;
     }
+
 
     const tryMatch = text.match(/^try$/);
     if (tryMatch) {

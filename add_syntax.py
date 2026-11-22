@@ -1,8 +1,27 @@
 #!/usr/bin/env python3
 import argparse
+import re
 import shutil
 import sys
 from pathlib import Path
+
+
+def normalize_js_template(js_str: str) -> str:
+    # Convert clean $1, $2, ... placeholders into ${m[1]}, ${m[2]}, ...
+    js_str = re.sub(r"\$(\d+)", r"${m[\1]}", js_str)
+
+    # Auto-fix accidental expandRefs(m) without index -> expandRefs(m[1])
+    js_str = re.sub(r"expandRefs\(\s*m\s*\)", "expandRefs(m[1])", js_str)
+
+    # Prevent bare ${m} without array index
+    if re.search(r"\$\{\s*m\s*\}", js_str):
+        print(
+            "Error: Bare '${m}' detected in --js. Use '$1', '$2' or '${m[1]}' instead.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    return js_str
 
 
 def main():
@@ -22,7 +41,7 @@ def main():
     parser.add_argument(
         "--js",
         required=True,
-        help="Compiled JS template (m and expandRefs() are available)",
+        help="Compiled JS template (use $1, $2 for capture groups and expandRefs($1))",
     )
     parser.add_argument(
         "--block",
@@ -53,6 +72,7 @@ def main():
         print(f"Error: {app_path} not found.", file=sys.stderr)
         sys.exit(1)
 
+    js_template = normalize_js_template(args.js)
     content = app_path.read_text(encoding="utf-8")
 
     # Create a backup before modifying app.js
@@ -70,7 +90,7 @@ def main():
             f"    const {var_name} = text.match(/{args.regex}/);\n"
             f"    if ({var_name}) {{\n"
             f"      const m = {var_name};\n"
-            f"      output.push(`${{pad}}{args.js}`);\n"
+            f"      output.push(`${{pad}}{js_template}`);\n"
             f"      blockStack.push({{ indent, closer: {repr(args.block)} }});\n"
             f"      continue;\n"
             f"    }}\n\n"
@@ -80,7 +100,7 @@ def main():
             f"    const {var_name} = text.match(/{args.regex}/);\n"
             f"    if ({var_name}) {{\n"
             f"      const m = {var_name};\n"
-            f"      output.push(`${{pad}}{args.js}`);\n"
+            f"      output.push(`${{pad}}{js_template}`);\n"
             f"      continue;\n"
             f"    }}\n\n"
         )
