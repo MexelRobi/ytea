@@ -151,6 +151,7 @@ const FALLBACK_HTML_TAGS = [
 const FALLBACK_CSS_PROPS = Object.keys(CSS_SMART_DEFAULTS);
 
 const Y_LANGUAGE_SUGGESTIONS = [
+  { label: 'set title to text', insert: 'set title to ""', kind: 'keyword', detail: 'Change the browser tab title' },
   { label: 'scroll to @id', insert: 'scroll to @', kind: 'keyword', detail: 'Smooth scroll to an element' },
   { label: 'copy text', insert: 'copy ', kind: 'keyword', detail: 'Copy text to clipboard' },
   { label: 'var name = value', insert: 'var ', kind: 'keyword', detail: 'Make a box that holds a value' },
@@ -1199,11 +1200,7 @@ function restructureYToJS(source) {
       continue;
     }
 
-    const setTitleMatch = text.match(/^set\s+title\s+to\s+(.+)$/);
-    if (setTitleMatch) {
-      output.push(`${pad}window.top.document.title = ${expandRefs(setTitleMatch[1])};`);
-      continue;
-    }
+    
     const copyTextMatch = text.match(/^copy\s+(.+)$/);
     if (copyTextMatch) {
       const m = copyTextMatch;
@@ -1215,6 +1212,13 @@ function restructureYToJS(source) {
     if (scrollToMatch) {
       const m = scrollToMatch;
       output.push(`${pad}document.getElementById('${m[1]}').scrollIntoView({ behavior: 'smooth' });`);
+      continue;
+    }
+
+    const setPageTitleMatch = text.match(/^set\s+title\s+to\s+(.+)$/);
+    if (setPageTitleMatch) {
+      const m = setPageTitleMatch;
+      output.push(`${pad}window.top.document.title = ${expandRefs(m[1])};`);
       continue;
     }
 
