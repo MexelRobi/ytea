@@ -151,6 +151,7 @@ const FALLBACK_HTML_TAGS = [
 const FALLBACK_CSS_PROPS = Object.keys(CSS_SMART_DEFAULTS);
 
 const Y_LANGUAGE_SUGGESTIONS = [
+  { label: 'on quit', insert: 'on quit', kind: 'keyword', detail: 'Run code when closing or leaving the page' },
   { label: 'delete cookie "name"', insert: 'delete cookie ""', kind: 'keyword', detail: 'Delete a cookie' },
   { label: 'var x = load cookie "name"', insert: 'var x = load cookie ""', kind: 'keyword', detail: 'Read a cookie value' },
   { label: 'save cookie "name" as val', insert: 'save cookie "" as ', kind: 'keyword', detail: 'Save a cookie (30 days)' },
@@ -1291,6 +1292,14 @@ function restructureYToJS(source) {
     if (delCookieMatch) {
       const m = delCookieMatch;
       output.push(`${pad}document.cookie = ${m} + '=;path=/;max-age=0';`);
+      continue;
+    }
+
+    const onQuitMatch = text.match(/^on\s+quit$/);
+    if (onQuitMatch) {
+      const m = onQuitMatch;
+      output.push(`${pad}(() => { let __q = false; const __fn = () => { if (__q) return; __q = true;`);
+      blockStack.push({ indent, closer: "}; window.addEventListener('pagehide', __fn); window.addEventListener('beforeunload', __fn); })();" });
       continue;
     }
 
