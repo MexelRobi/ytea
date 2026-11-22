@@ -151,6 +151,15 @@ const FALLBACK_HTML_TAGS = [
 const FALLBACK_CSS_PROPS = Object.keys(CSS_SMART_DEFAULTS);
 
 const Y_LANGUAGE_SUGGESTIONS = [
+  { label: 'delete cookie "name"', insert: 'delete cookie ""', kind: 'keyword', detail: 'Delete a cookie' },
+  { label: 'var x = load cookie "name"', insert: 'var x = load cookie ""', kind: 'keyword', detail: 'Read a cookie value' },
+  { label: 'save cookie "name" as val', insert: 'save cookie "" as ', kind: 'keyword', detail: 'Save a cookie (30 days)' },
+  { label: 'delete session "key"', insert: 'delete session ""', kind: 'keyword', detail: 'Remove key from sessionStorage' },
+  { label: 'var x = load session "key"', insert: 'var x = load session ""', kind: 'keyword', detail: 'Load value from sessionStorage' },
+  { label: 'save session "key" as val', insert: 'save session "" as ', kind: 'keyword', detail: 'Save value to sessionStorage' },
+  { label: 'delete local "key"', insert: 'delete local ""', kind: 'keyword', detail: 'Remove key from localStorage' },
+  { label: 'var x = load local "key"', insert: 'var x = load local ""', kind: 'keyword', detail: 'Load value from localStorage' },
+  { label: 'save local "key" as val', insert: 'save local "" as ', kind: 'keyword', detail: 'Save value to localStorage' },
   { label: 'set title to text', insert: 'set title to ""', kind: 'keyword', detail: 'Change the browser tab title' },
   { label: 'scroll to @id', insert: 'scroll to @', kind: 'keyword', detail: 'Smooth scroll to an element' },
   { label: 'copy text', insert: 'copy ', kind: 'keyword', detail: 'Copy text to clipboard' },
@@ -1219,6 +1228,69 @@ function restructureYToJS(source) {
     if (setPageTitleMatch) {
       const m = setPageTitleMatch;
       output.push(`${pad}window.top.document.title = ${expandRefs(m[1])};`);
+      continue;
+    }
+
+    const saveLocalMatch = text.match(/^save\s+local\s+("[^"]+"|'[^']+')\s+as\s+(.+)$/);
+    if (saveLocalMatch) {
+      const m = saveLocalMatch;
+      output.push(`${pad}localStorage.setItem(${m}, JSON.stringify(${expandRefs(m)}));`);
+      continue;
+    }
+
+    const loadLocalMatch = text.match(/^var\s+([a-zA-Z0-9_$]+)\s*=\s*load\s+local\s+("[^"]+"|'[^']+')$/);
+    if (loadLocalMatch) {
+      const m = loadLocalMatch;
+      output.push(`${pad}let ${m} = JSON.parse(localStorage.getItem(${m}));`);
+      continue;
+    }
+
+    const delLocalMatch = text.match(/^delete\s+local\s+("[^"]+"|'[^']+')$/);
+    if (delLocalMatch) {
+      const m = delLocalMatch;
+      output.push(`${pad}localStorage.removeItem(${m});`);
+      continue;
+    }
+
+    const saveSessionMatch = text.match(/^save\s+session\s+("[^"]+"|'[^']+')\s+as\s+(.+)$/);
+    if (saveSessionMatch) {
+      const m = saveSessionMatch;
+      output.push(`${pad}sessionStorage.setItem(${m}, JSON.stringify(${expandRefs(m)}));`);
+      continue;
+    }
+
+    const loadSessionMatch = text.match(/^var\s+([a-zA-Z0-9_$]+)\s*=\s*load\s+session\s+("[^"]+"|'[^']+')$/);
+    if (loadSessionMatch) {
+      const m = loadSessionMatch;
+      output.push(`${pad}let ${m} = JSON.parse(sessionStorage.getItem(${m}));`);
+      continue;
+    }
+
+    const delSessionMatch = text.match(/^delete\s+session\s+("[^"]+"|'[^']+')$/);
+    if (delSessionMatch) {
+      const m = delSessionMatch;
+      output.push(`${pad}sessionStorage.removeItem(${m});`);
+      continue;
+    }
+
+    const saveCookieMatch = text.match(/^save\s+cookie\s+("[^"]+"|'[^']+')\s+as\s+(.+)$/);
+    if (saveCookieMatch) {
+      const m = saveCookieMatch;
+      output.push(`${pad}document.cookie = ${m} + '=' + encodeURIComponent(JSON.stringify(${expandRefs(m)})) + ';path=/;max-age=2592000';`);
+      continue;
+    }
+
+    const loadCookieMatch = text.match(/^var\s+([a-zA-Z0-9_$]+)\s*=\s*load\s+cookie\s+("[^"]+"|'[^']+')$/);
+    if (loadCookieMatch) {
+      const m = loadCookieMatch;
+      output.push(`${pad}let ${m} = (() => { const v = document.cookie.split('; ').find(r => r.startsWith(${m} + '=')); return v ? JSON.parse(decodeURIComponent(v.split('=')[1])) : null; })();`);
+      continue;
+    }
+
+    const delCookieMatch = text.match(/^delete\s+cookie\s+("[^"]+"|'[^']+')$/);
+    if (delCookieMatch) {
+      const m = delCookieMatch;
+      output.push(`${pad}document.cookie = ${m} + '=;path=/;max-age=0';`);
       continue;
     }
 
