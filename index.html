@@ -58,6 +58,9 @@
         <button id="btnPreview" class="tb-btn tb-accent" title="Run preview (Ctrl+Enter)">
           <span>Run</span>
         </button>
+        <button id="btnConsole" class="tb-btn" type="button" aria-expanded="false">
+          <span>Console</span>
+        </button>
         <button id="btnExport" class="tb-btn" title="Export ZenoPack HTML">
           <span>Export</span>
         </button>
@@ -148,6 +151,19 @@
         <div class="editor-view" id="view-readme">
           <div class="readme-container" id="readmeContent"></div>
         </div>
+
+        <section id="runConsole" class="run-console" aria-label="Run console" hidden>
+          <div class="run-console-header">
+            <span>Console</span>
+            <div class="run-console-actions">
+              <button id="btnClearConsole" type="button">Clear</button>
+              <button id="btnHideConsole" type="button">Hide</button>
+            </div>
+          </div>
+          <div id="runConsoleOutput" class="run-console-output" role="log" aria-live="polite">
+            <div class="run-console-empty">Run the project to see console output.</div>
+          </div>
+        </section>
       </main>
     </div>
 

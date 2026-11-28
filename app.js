@@ -258,6 +258,7 @@ const ZENOPACK_MIME_MAP = {
   txt: 'text/plain', xml: 'application/xml', wasm: 'application/wasm',
 };
 const ZENOPACK_HTML_PLACEHOLDER = '__ZENOPACK_BASE64__';
+const LARGE_ASSET_EDITOR_THRESHOLD = 1024 * 1024;
 
 let projects = [];
 let activeProjectId = null;
@@ -582,7 +583,7 @@ function closeOpenTab(type, id) {
 
   const wasActive =
     (type === 'file' && activeViewMode === 'code' && proj.activeFileId === id) ||
-    (type === 'asset' && activeViewMode === 'asset' && selectedAssetId === id) ||
+    (type === 'asset' && isAssetViewActive() && selectedAssetId === id) ||
     (type === 'docs' && activeViewMode === 'readme');
 
   proj.openTabs.splice(idx, 1);
@@ -681,6 +682,10 @@ function getSelectedAsset() {
   const proj = getActiveProject();
   if (!proj || !selectedAssetId) return null;
   return proj.assets.find(a => a.id === selectedAssetId) || null;
+}
+
+function isAssetViewActive() {
+  return activeViewMode === 'asset' || activeViewMode === 'asset-code';
 }
 
 function getZenopackMime(filename) {
@@ -1549,14 +1554,74 @@ function buildZenopackStandaloneHtml(pack) {
 
 const ZENOPACK_HTML_TEMPLATE = "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<title>__PROJECT_TITLE__</title>\n<style>\nhtml,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}\n#game-frame{display:block;width:100%;height:100%;border:0}\n#loading{position:fixed;inset:0;display:grid;place-items:center;background:#111;color:#eee;font:14px system-ui;z-index:10}\n#loading span{opacity:.8}\n</style>\n</head>\n<body>\n<div id=\"loading\"><span>Loading...</span></div>\n<iframe id=\"game-frame\" allow=\"fullscreen; autoplay; gamepad\" allowfullscreen></iframe>\n\n<script>\n\"use strict\";\n\nconst GAME_BASE64 = \"__ZENOPACK_BASE64__\";\n\n(async function () {\n    const loading = document.getElementById(\"loading\");\n\n    const showError = message => {\n        loading.style.display = \"grid\";\n        loading.innerHTML = \"<span></span>\";\n        loading.querySelector(\"span\").textContent = \"Loading failed: \" + message;\n    };\n\n    const fileURLs = new Map();\n\n    try {\n        const binary = atob(GAME_BASE64);\n        const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));\n        const pack = JSON.parse(new TextDecoder().decode(bytes));\n\n        if (!pack || !pack.zenopack || !pack.name || !Array.isArray(pack.files)) {\n            throw new Error(\"Invalid bundle structure\");\n        }\n\n        for (const file of pack.files) {\n            if (!file || typeof file.path !== \"string\" || !Array.isArray(file.data)) {\n                throw new Error(\"Invalid file entry\");\n            }\n\n            const path = file.path.replace(/\\\\/g, \"/\").replace(/^\\/+/, \"\");\n            const segments = path.split(\"/\");\n\n            if (!path || segments.includes(\"..\") || fileURLs.has(path)) {\n                throw new Error(\"Unsafe or duplicate path: \" + path);\n            }\n\n            const blob = new Blob(\n                [new Uint8Array(file.data)],\n                { type: file.mimeType || \"application/octet-stream\" }\n            );\n\n            fileURLs.set(path, URL.createObjectURL(blob));\n        }\n\n        const indexEntry = pack.files.find(\n            f => f.path.toLowerCase() === \"index.html\"\n        );\n\n        if (!indexEntry) {\n            throw new Error(\"Missing index.html\");\n        }\n\n        function normalizePath(input) {\n            let value = String(input);\n\n            if (/^(blob:|data:|https?:|javascript:|mailto:|tel:|#|\\/\\/)/i.test(value)) {\n                return null;\n            }\n\n            value = value.split(\"#\", 1)[0].split(\"?\", 1)[0];\n\n            try {\n                value = decodeURIComponent(value);\n            } catch (_) {}\n\n            value = value.replace(/\\\\/g, \"/\");\n\n            if (/^[a-z][a-z0-9+.-]*:\\/\\//i.test(value)) {\n                try {\n                    value = new URL(value).pathname;\n                } catch (_) {\n                    return null;\n                }\n            }\n\n            const parts = [];\n\n            for (const part of value.split(\"/\")) {\n                if (!part || part === \".\") continue;\n\n                if (part === \"..\") {\n                    if (!parts.length) return null;\n                    parts.pop();\n                } else {\n                    parts.push(part);\n                }\n            }\n\n            let key = parts.join(\"/\");\n\n            if (key === \"archive_files.json\") {\n                key = \"archive/archive_files.json\";\n            }\n\n            return key;\n        }\n\n        function findFileURL(input) {\n            const key = normalizePath(input);\n\n            if (!key) return null;\n            if (fileURLs.has(key)) return fileURLs.get(key);\n\n            const archivePos = key.lastIndexOf(\"archive/\");\n\n            if (archivePos >= 0) {\n                const archiveKey = key.slice(archivePos);\n\n                if (fileURLs.has(archiveKey)) {\n                    return fileURLs.get(archiveKey);\n                }\n            }\n\n            const basename = key.split(\"/\").pop();\n\n            if (fileURLs.has(basename)) {\n                return fileURLs.get(basename);\n            }\n\n            return null;\n        }\n\n        const virtualFiles = Object.fromEntries(fileURLs);\n\n        const bootstrap = `<script>\n        (() => {\n            const files = ${JSON.stringify(virtualFiles)};\n\n            function resolveAsset(input) {\n                let value = String(input);\n\n                if (/^(blob:|data:|https?:|javascript:|mailto:|tel:|#|\\\\/\\\\/)/i.test(value)) {\n                    return null;\n                }\n\n                value = value.split(\"#\", 1)[0].split(\"?\", 1)[0];\n\n                try {\n                    value = decodeURIComponent(value);\n                } catch (_) {}\n\n                value = value.replace(/\\\\\\\\/g, \"/\");\n\n                if (/^[a-z][a-z0-9+.-]*:\\\\/\\\\//i.test(value)) {\n                    try {\n                        value = new URL(value).pathname;\n                    } catch (_) {\n                        return null;\n                    }\n                }\n\n                const parts = [];\n\n                for (const part of value.split(\"/\")) {\n                    if (!part || part === \".\") continue;\n\n                    if (part === \"..\") {\n                        if (!parts.length) return null;\n                        parts.pop();\n                    } else {\n                        parts.push(part);\n                    }\n                }\n\n                let key = parts.join(\"/\");\n\n                if (key === \"archive_files.json\") {\n                    key = \"archive/archive_files.json\";\n                }\n\n                if (files[key]) return files[key];\n\n                const archivePos = key.lastIndexOf(\"archive/\");\n\n                if (archivePos >= 0 && files[key.slice(archivePos)]) {\n                    return files[key.slice(archivePos)];\n                }\n\n                const basename = key.split(\"/\").pop();\n\n                return files[basename] || null;\n            }\n\n            const originalOpen = XMLHttpRequest.prototype.open;\n\n            XMLHttpRequest.prototype.open = function(method, url, ...rest) {\n                const local = resolveAsset(url);\n                return originalOpen.call(this, method, local || url, ...rest);\n            };\n\n            if (window.fetch) {\n                const originalFetch = window.fetch.bind(window);\n\n                window.fetch = function(input, init) {\n                    const raw = input instanceof Request ? input.url : input;\n                    const local = resolveAsset(raw);\n\n                    return local\n                        ? originalFetch(local, init)\n                        : originalFetch(input, init);\n                };\n            }\n\n            const originalSetAttribute = Element.prototype.setAttribute;\n\n            Element.prototype.setAttribute = function(name, value) {\n                if (/^(src|href|poster)$/i.test(name)) {\n                    const local = resolveAsset(value);\n                    if (local) value = local;\n                }\n\n                return originalSetAttribute.call(this, name, value);\n            };\n\n            for (const Proto of [HTMLImageElement, HTMLAudioElement, HTMLVideoElement, HTMLSourceElement, HTMLScriptElement]) {\n                const desc = Object.getOwnPropertyDescriptor(Proto.prototype, \"src\");\n                if (desc && desc.get && desc.set) {\n                    Object.defineProperty(Proto.prototype, \"src\", {\n                        configurable: desc.configurable,\n                        enumerable: desc.enumerable,\n                        get: function() { return desc.get.call(this); },\n                        set: function(value) { desc.set.call(this, resolveAsset(value) || value); }\n                    });\n                }\n            }\n\n            const OrigAudio = window.Audio;\n            if (OrigAudio) {\n                window.Audio = function(src) {\n                    return new OrigAudio(src ? (resolveAsset(src) || src) : undefined);\n                };\n                window.Audio.prototype = OrigAudio.prototype;\n            }\n\n            const innerHtmlDesc = Object.getOwnPropertyDescriptor(Element.prototype, \"innerHTML\");\n            if (innerHtmlDesc && innerHtmlDesc.get && innerHtmlDesc.set) {\n                Object.defineProperty(Element.prototype, \"innerHTML\", {\n                    configurable: innerHtmlDesc.configurable,\n                    enumerable: innerHtmlDesc.enumerable,\n                    get: function() { return innerHtmlDesc.get.call(this); },\n                    set: function(value) {\n                        const rewritten = String(value).replace(\n                            /\\\\b(src|href|poster)\\\\s*=\\\\s*([\"'])(.*?)\\\\2/gi,\n                            (m, attr, q, val) => {\n                                const local = resolveAsset(val);\n                                return local ? attr + \"=\" + q + local + q : m;\n                            }\n                        );\n                        innerHtmlDesc.set.call(this, rewritten);\n                    }\n                });\n            }\n\n            const scriptSrcDescriptor =\n                Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, \"src\");\n\n            if (\n                scriptSrcDescriptor &&\n                scriptSrcDescriptor.get &&\n                scriptSrcDescriptor.set\n            ) {\n                Object.defineProperty(HTMLScriptElement.prototype, \"src\", {\n                    configurable: scriptSrcDescriptor.configurable,\n                    enumerable: scriptSrcDescriptor.enumerable,\n\n                    get: function() {\n                        return scriptSrcDescriptor.get.call(this);\n                    },\n\n                    set: function(value) {\n                        const local = resolveAsset(value);\n                        scriptSrcDescriptor.set.call(this, local || value);\n                    }\n                });\n            }\n        })();\n        <\\/script>`;\n\n        let gameHTML = new TextDecoder().decode(\n            new Uint8Array(indexEntry.data)\n        );\n\n        gameHTML = gameHTML.replace(\n            /\\b(src|href|poster|data)\\s*=\\s*([\"'])(.*?)\\2/gi,\n            (match, attr, quote, value) => {\n                const local = findFileURL(value);\n                return local ? `${attr}=${quote}${local}${quote}` : match;\n            }\n        );\n\n        gameHTML = gameHTML.replace(\n            /url\\(\\s*([\"']?)(?!data:|https?:|blob:|\\/\\/|#)([^)'\"]+)\\1\\s*\\)/gi,\n            (match, quote, path) => {\n                const local = findFileURL(path.trim());\n                return local ? `url(\"${local}\")` : match;\n            }\n        );\n\n        gameHTML = gameHTML.replace(/,\\s*minimal-ui|minimal-ui\\s*,?/gi, \"\");\n\n        if (/<head\\b[^>]*>/i.test(gameHTML)) {\n            gameHTML = gameHTML.replace(\n                /<head\\b[^>]*>/i,\n                head => head + bootstrap\n            );\n        } else {\n            gameHTML = bootstrap + gameHTML;\n        }\n\n        document.getElementById(\"game-frame\").srcdoc = gameHTML;\n        document.title = pack.name;\n        loading.style.display = \"none\";\n\n        console.info(\n            \"Bundle loaded:\",\n            pack.name,\n            \"| Files:\",\n            pack.files.length\n        );\n\n    } catch (error) {\n        console.error(error);\n        showError(error && error.message ? error.message : String(error));\n    }\n})();\n</script>\n</body>\n</html>\n";
 
-function buildExportDocument() {
+function injectPreviewConsoleCapture(html) {
+  const captureScript = `<script>
+(() => {
+  if (window.parent === window || !window.parent.__YTEA_CAPTURE_CONSOLE__) return;
+
+  const stringify = value => {
+    if (typeof value === 'string') return value;
+    if (value instanceof Error) return value.stack || value.name + ': ' + value.message;
+    try {
+      const json = JSON.stringify(value);
+      return json === undefined ? String(value) : json;
+    } catch {
+      return String(value);
+    }
+  };
+  const send = (level, text) => window.parent.postMessage({
+    type: 'ytea-console',
+    level,
+    text: String(text).slice(0, 10000)
+  }, '*');
+
+  ['log', 'info', 'warn', 'error', 'debug'].forEach(level => {
+    const original = console[level].bind(console);
+    console[level] = (...args) => {
+      original(...args);
+      send(level, args.map(stringify).join(' '));
+    };
+  });
+  window.addEventListener('error', event => {
+    send('error', event.message || String(event.error || 'Uncaught error'));
+  });
+  window.addEventListener('unhandledrejection', event => {
+    send('error', 'Unhandled rejection: ' + stringify(event.reason));
+  });
+})();
+<\/script>`;
+  if (/<head\b[^>]*>/i.test(html)) {
+    return html.replace(/<head\b[^>]*>/i, head => head + captureScript);
+  }
+  return captureScript + html;
+}
+
+function injectPreviewConsoleRelay(html) {
+  const relayScript = `<script>
+window.__YTEA_CAPTURE_CONSOLE__ = true;
+window.addEventListener('message', event => {
+  const frame = document.getElementById('game-frame');
+  const data = event.data;
+  if (!frame || event.source !== frame.contentWindow || !data || data.type !== 'ytea-console') return;
+  if (window.opener && !window.opener.closed) window.opener.postMessage(data, '*');
+});
+<\/script>`;
+  return html.replace('<body>', `<body>${relayScript}`);
+}
+
+function buildExportDocument(options = {}) {
   compileProject(false);
   const proj = getActiveProject();
-  const pack = buildZenopackObject(proj, lastCompiledDocument);
+  const compiledHtml = options.captureConsole
+    ? injectPreviewConsoleCapture(lastCompiledDocument)
+    : lastCompiledDocument;
+  const pack = buildZenopackObject(proj, compiledHtml);
+  let html = buildZenopackStandaloneHtml(pack);
+  if (options.captureConsole) html = injectPreviewConsoleRelay(html);
   return {
     proj,
     pack,
-    html: buildZenopackStandaloneHtml(pack)
+    html
   };
 }
 
@@ -1609,7 +1674,7 @@ function renderWorkspaceUI() {
       const li = document.createElement('li');
       const isActive = entry.kind === 'file'
         ? (activeViewMode === 'code' && entry.id === proj.activeFileId)
-        : (activeViewMode === 'asset' && selectedAssetId === entry.id);
+        : (isAssetViewActive() && selectedAssetId === entry.id);
       li.className = 'file-item' + (isActive ? ' active' : '');
       li.style.setProperty('--tree-depth', String(entry.depth));
       li.title = entry.path;
@@ -1655,7 +1720,7 @@ function renderWorkspaceUI() {
       label = asset.path;
       tagClass = 'tag-asset';
       tagLabel = 'A';
-      isActive = activeViewMode === 'asset' && selectedAssetId === asset.id;
+      isActive = isAssetViewActive() && selectedAssetId === asset.id;
       el.addEventListener('click', () => openAssetView(asset.id, { addTab: false }));
     } else if (tab.type === 'docs') {
       label = (tab.id === 'index' || docsView === 'index')
@@ -1911,14 +1976,42 @@ function openAssetView(assetId, options = {}) {
       <div class="asset-preview-meta">
         <div class="asset-preview-path">${escapeHtml(asset.path)}</div>
         <div class="asset-preview-details">${escapeHtml(asset.mimeType || 'application/octet-stream')} · ${escapeHtml(sizeLabel)}</div>
+        <button type="button" class="asset-preview-edit">Edit as text</button>
       </div>
       ${isImage
         ? `<img class="asset-preview-image" alt="${escapeHtml(asset.path)}" src="data:${escapeHtml(asset.mimeType)};base64,${asset.dataBase64}" />`
         : `<div class="asset-preview-empty">Binary asset — included as-is in ZenoPack export</div>`}
     `;
+    assetPreview.querySelector('.asset-preview-edit').addEventListener('click', openAssetTextEditor);
   }
   switchEditorStage('view-asset');
   renderWorkspaceUI();
+}
+
+async function openAssetTextEditor() {
+  const asset = getSelectedAsset();
+  if (!asset) return;
+
+  const size = asset.size || Math.floor(((asset.dataBase64 || '').length * 3) / 4);
+  if (size >= LARGE_ASSET_EDITOR_THRESHOLD) {
+    const sizeLabel = formatBytes(size);
+    const confirmed = await showStyledConfirm(
+      `This file is large (${sizeLabel}). Opening it in the text editor may slow down the app. Continue?`
+    );
+    if (!confirmed) return;
+  }
+
+  const bytes = base64ToBytes(asset.dataBase64);
+  activeViewMode = 'asset-code';
+  codeEditor.value = new TextDecoder().decode(bytes);
+  updateEditorVisuals();
+  updateCursorAndLineHighlight();
+  const proj = getActiveProject();
+  document.getElementById('windowTitleText').textContent = `${asset.path} — ${proj.name}`;
+  document.getElementById('breadcrumb').textContent = `${proj.name} › ${asset.path}`;
+  switchEditorStage('view-code');
+  renderWorkspaceUI();
+  codeEditor.focus();
 }
 
 function switchEditorStage(viewId) {
@@ -1965,7 +2058,7 @@ function openPreviewPopup() {
 
   let html;
   try {
-    html = buildExportDocument().html;
+    html = buildExportDocument({ captureConsole: true }).html;
   } catch (err) {
     console.error(err);
     showToast('Preview failed: ' + (err && err.message ? err.message : err));
@@ -1978,13 +2071,65 @@ function openPreviewPopup() {
     previewWindowRef.focus();
   }
   if (previewWindowRef) {
+    clearRunConsole();
     previewWindowRef.document.open();
     previewWindowRef.document.write(html);
     previewWindowRef.document.close();
+    setRunConsoleVisible(true);
   } else {
     showToast('Popup blocked — please allow popups');
   }
 }
+
+function setRunConsoleVisible(visible) {
+  const panel = document.getElementById('runConsole');
+  const button = document.getElementById('btnConsole');
+  if (!panel || !button) return;
+  panel.hidden = !visible;
+  button.setAttribute('aria-expanded', String(visible));
+}
+
+function clearRunConsole() {
+  const output = document.getElementById('runConsoleOutput');
+  if (!output) return;
+  output.innerHTML = '<div class="run-console-empty">Run the project to see console output.</div>';
+}
+
+function appendRunConsoleMessage(level, text) {
+  const output = document.getElementById('runConsoleOutput');
+  if (!output) return;
+  output.querySelector('.run-console-empty')?.remove();
+
+  const entry = document.createElement('div');
+  entry.className = `run-console-entry run-console-${level}`;
+  const levelLabel = document.createElement('span');
+  levelLabel.className = 'run-console-level';
+  levelLabel.textContent = level.toUpperCase();
+  const message = document.createElement('span');
+  message.textContent = text;
+  entry.append(levelLabel, message);
+  output.appendChild(entry);
+
+  while (output.children.length > 500) output.firstElementChild.remove();
+  output.scrollTop = output.scrollHeight;
+}
+
+window.addEventListener('message', event => {
+  const sameOrigin = event.origin === window.location.origin ||
+    (window.location.protocol === 'file:' && event.origin === 'null');
+  if (!previewWindowRef || event.source !== previewWindowRef || !sameOrigin) return;
+  const message = event.data;
+  if (!message || message.type !== 'ytea-console' ||
+      !['log', 'info', 'warn', 'error', 'debug'].includes(message.level) ||
+      typeof message.text !== 'string') return;
+  appendRunConsoleMessage(message.level, message.text);
+});
+
+document.getElementById('btnConsole').addEventListener('click', () => {
+  setRunConsoleVisible(document.getElementById('runConsole').hidden);
+});
+document.getElementById('btnClearConsole').addEventListener('click', clearRunConsole);
+document.getElementById('btnHideConsole').addEventListener('click', () => setRunConsoleVisible(false));
 
 codeEditor.addEventListener('scroll', () => {
   syncEditorScroll();
@@ -2002,8 +2147,18 @@ codeEditor.addEventListener('keyup', (e) => {
 });
 
 codeEditor.addEventListener('input', () => {
-  const file = getActiveFile();
-  if (file) { file.content = codeEditor.value; saveProjects(); }
+  if (activeViewMode === 'asset-code') {
+    const asset = getSelectedAsset();
+    if (asset) {
+      const bytes = new TextEncoder().encode(codeEditor.value);
+      asset.dataBase64 = bytesToBase64(bytes);
+      asset.size = bytes.length;
+      saveProjects();
+    }
+  } else {
+    const file = getActiveFile();
+    if (file) { file.content = codeEditor.value; saveProjects(); }
+  }
   statusCompile.textContent = 'Modified';
   statusCompile.className = 'status-item warn';
   updateEditorVisuals();
@@ -2075,7 +2230,12 @@ codeEditor.addEventListener('keydown', (e) => {
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
     e.preventDefault();
-    compileProject(true);
+    if (activeViewMode === 'asset-code') {
+      saveProjects();
+      showToast('Asset saved');
+    } else {
+      compileProject(true);
+    }
   } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
     e.preventDefault();
     openPreviewPopup();
@@ -2090,7 +2250,7 @@ document.addEventListener('keydown', (e) => {
  * @returns {Promise<string | null>} - Resolves with the trimmed input value,
  *   or null if the user clicks Cancel or presses Escape.
  */
-function showStyledPrompt(message, defaultValue = '') {
+function showStyledPrompt(message, defaultValue = '', allowEmpty = false) {
   return new Promise((resolve) => {
     // Remove any existing modal
     const existing = document.querySelector('.prompt-overlay');
@@ -2127,7 +2287,7 @@ function showStyledPrompt(message, defaultValue = '') {
     okBtn.addEventListener('click', () => {
       const value = input.value.trim();
       closeModal();
-      resolve(value ? value : null);
+      resolve(value || allowEmpty ? value : null);
     });
 
     // Cancel button -> resolve null
@@ -2143,6 +2303,67 @@ function showStyledPrompt(message, defaultValue = '') {
         resolve(null);
       }
     }
+    document.addEventListener('keydown', handleKeyDown);
+  });
+}
+
+function showStyledSelect(message, options, defaultValue) {
+  return new Promise((resolve) => {
+    const existing = document.querySelector('.prompt-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'prompt-overlay';
+    overlay.innerHTML = `
+      <div class="prompt-modal">
+        <div style="margin-bottom: 16px; color: var(--text-main); font-size: 14px;">${message}</div>
+        <select class="prompt-select" aria-label="${message}"></select>
+        <div class="buttons">
+          <button class="btn ok" style="background:transparent;border:1px solid var(--accent);color:var(--text-main);padding:6px 12px;border-radius:8px;font:inherit;font-size:13px;">OK</button>
+          <button class="btn cancel" style="background:transparent;border:1px solid var(--border);color:var(--text-main);padding:6px 12px;border-radius:8px;font:inherit;font-size:13px;">Cancel</button>
+        </div>
+      </div>
+    `;
+    const select = overlay.querySelector('select');
+    options.forEach((option) => {
+      const element = document.createElement('option');
+      element.value = option;
+      element.textContent = option;
+      select.appendChild(element);
+    });
+    select.value = defaultValue;
+    document.body.appendChild(overlay);
+    overlay.classList.add('visible');
+    select.focus();
+
+    let finished = false;
+
+    function closeModal() {
+      overlay.classList.remove('visible');
+      setTimeout(() => overlay.remove(), 200);
+    }
+
+    function finish(value) {
+      if (finished) return;
+      finished = true;
+      closeModal();
+      resolve(value);
+      document.removeEventListener('keydown', handleKeyDown);
+    }
+
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') finish(null);
+      else if (e.key === 'Enter') finish(select.value);
+    }
+
+    overlay.querySelector('.btn.ok').addEventListener('click', () => {
+      finish(select.value);
+    });
+
+    overlay.querySelector('.btn.cancel').addEventListener('click', () => {
+      finish(null);
+    });
+
     document.addEventListener('keydown', handleKeyDown);
   });
 }
@@ -2204,13 +2425,25 @@ function showStyledConfirm(message) {
 async function createNewFile() {
   const proj = getActiveProject();
   if (!proj) return;
-  let name = await showStyledPrompt('New file name:', `page-${proj.files.length + 1}.ytea`);
+  let name = await showStyledPrompt('New file name:', `page-${proj.files.length + 1}`);
   if (!name || !name.trim()) return;
-  name = name.trim().endsWith('.ytea') ? name.trim() : name.trim() + '.ytea';
-  const type = await showStyledPrompt('UI (looks) or Y (does)?', 'UI');
-  const content = (type && type.trim().toUpperCase() === 'Y')
+  const type = await showStyledSelect('Choose file type:', ['UI', 'Y', 'NONE'], 'UI');
+  if (!type) return;
+
+  if (type === 'NONE') {
+    const suffix = await showStyledPrompt('Custom file suffix (leave blank for no extension):', '', true);
+    if (suffix === null) return;
+    const normalizedSuffix = suffix && !suffix.startsWith('.') ? `.${suffix}` : suffix;
+    name = `${name.trim()}${normalizedSuffix}`;
+  } else {
+    name = name.trim().endsWith('.ytea') ? name.trim() : `${name.trim()}.ytea`;
+  }
+
+  const content = type === 'Y'
     ? '#Y//\n'
-    : '#UI//\ndiv(id="box")\n  .padding(16px)\n  h1 "Hello"\n';
+    : type === 'UI'
+      ? '#UI//\ndiv(id="box")\n  .padding(16px)\n  h1 "Hello"\n'
+      : '';
   const nf = { id: generateId('file'), name, content };
   proj.files.push(nf);
   proj.activeFileId = nf.id;
@@ -2225,7 +2458,7 @@ document.getElementById('actNewFile').addEventListener('click', createNewFile);
 document.getElementById('actReadme').addEventListener('click', () => openReadmeView('readme'));
 
 document.getElementById('btnRenameFile').addEventListener('click', async () => {
-  if (activeViewMode === 'asset') {
+  if (isAssetViewActive()) {
     const asset = getSelectedAsset();
     if (!asset) return;
     let n = await showStyledPrompt('Rename asset path:', asset.path);
@@ -2261,7 +2494,7 @@ document.getElementById('btnDeleteFile').addEventListener('click', async () => {
   const proj = getActiveProject();
   if (!proj) return;
 
-  if (activeViewMode === 'asset') {
+  if (isAssetViewActive()) {
     const asset = getSelectedAsset();
     if (!asset) return;
     if (await showStyledConfirm(`Delete asset ${asset.path}?`)) {

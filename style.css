@@ -530,6 +530,21 @@ body {
   color: var(--text-dim);
 }
 
+.asset-preview-edit {
+  margin-top: 14px;
+  padding: 7px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-main);
+  font: inherit;
+  cursor: pointer;
+}
+
+.asset-preview-edit:hover {
+  background: var(--accent-soft);
+}
+
 .asset-preview-image {
   display: block;
   max-width: min(100%, 720px);
@@ -687,6 +702,66 @@ body {
   display: flex;
   animation: viewIn 0.22s var(--ease-out) both;
 }
+
+.run-console {
+  display: flex;
+  flex: 0 0 190px;
+  flex-direction: column;
+  min-height: 120px;
+  border-top: 1px solid var(--border);
+  background: #0c100e;
+  color: var(--text-main);
+  font-family: var(--font-code);
+  font-size: 12px;
+}
+
+.run-console[hidden] { display: none; }
+
+.run-console-header {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px 0 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-bright);
+  font-family: var(--font-ui);
+  font-weight: 600;
+}
+
+.run-console-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.run-console-actions button {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.run-console-actions button:hover {
+  background: var(--bg-hover);
+  color: var(--text-bright);
+}
+
+.run-console-output {
+  flex: 1;
+  overflow: auto;
+  padding: 8px 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.run-console-entry { padding: 2px 0; }
+.run-console-level { display: inline-block; width: 52px; color: #8aa994; }
+.run-console-warn .run-console-level { color: #e7c66b; }
+.run-console-error .run-console-level { color: #ff7b72; }
+.run-console-empty { color: var(--text-dim); }
 
 @keyframes viewIn {
   from { opacity: 0; transform: translateY(4px); }
@@ -1255,6 +1330,17 @@ body {
   transform: scale(0.98);
 }
 .prompt-modal input {
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 14px;
+}
+.prompt-modal .prompt-select {
   width: 100%;
   padding: 8px 12px;
   margin-bottom: 16px;
